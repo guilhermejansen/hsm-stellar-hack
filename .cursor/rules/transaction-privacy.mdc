@@ -1,0 +1,279 @@
+---
+description: Complete transaction privacy implementation with ephemeral keys
+---
+
+# 🔐 TRANSACTION PRIVACY - EPHEMERAL KEYS ARCHITECTURE
+
+## Overview
+
+This rule documents the **complete transaction privacy system** using ephemeral keys, based on developer requirements and HSM DINAMO architecture.
+
+## 🎯 **CORE REQUIREMENTS (From Developer Conversation)**
+
+### **Key Insights from Discussion:**
+1. **"a transacional ela vai fazer a transação morre aquela chave"** → Transaction keys die after use
+2. **"ele sempre vai me gerar um endereço novo"** → New address per transaction
+3. **"É como se eu estivesse criando uma nova conta para cada transação"** → Ephemeral accounts
+4. **"Eu nunca vou conseguir correlacionar essa transação"** → Privacy protection
+5. **"tem que ter uma cara corporativa"** → Enterprise-grade interface
+
+## 🏗️ **COMPLETE BIP32 HIERARCHY**
+
+```
+HSM Partition (Single per User)
+├── Master Key (m)                    ← Root in HSM partition
+├── Cold Key (m/0')                   ← 95% funds, static address
+├── Hot Key (m/0'/0')                 ← 5% funds, static address
+└── Transaction Keys (m/0'/0'/N')     ← Ephemeral, new per transaction
+    ├── m/0'/0'/0' (TX #1)           ← Dies after TX #1
+    ├── m/0'/0'/1' (TX #2)           ← Dies after TX #2
+    ├── m/0'/0'/2' (TX #3)           ← Dies after TX #3
+    └── m/0'/0'/N' (TX #N)           ← Dies after TX #N
+```
+
+## 🔐 **TRANSACTION KEY LIFECYCLE**
+
+### **Generation Phase:**
+```typescript
+// 1. Transaction created
+const transaction = await createTransaction(params);
+
+// 2. Generate ephemeral key in HSM
+const ephemeralKey = await hsm.deriveKey({
+  parentKey: hotWalletKeyId,
+  derivationPath: `m/0'/0'/${transactionIndex}'`,
+  partition: userPartitionId,
+  temporary: true,        // Mark as temporary in HSM
+  expiresIn: 3600,       // 1 hour auto-expiry
+  oneTimeUse: true,      // Single signature only
+  autoDestroy: true      // Auto-destroy after use
+});
+
+// 3. New Stellar address generated (privacy protection)
+const newAddress = StellarSdk.StrKey.encodeEd25519PublicKey(ephemeralKey.publicKey);
+```
+
+### **Usage Phase:**
+```typescript
+// 4. Guardian approves with TOTP
+const totpValid = await validateTOTP(guardianId, totpCode);
+
+// 5. HSM releases ephemeral key for signing
+const signature = await hsm.signWithEphemeralKey({
+  keyId: ephemeralKey.keyId,
+  transactionData: rawTransaction,
+  oneTimeUse: true
+});
+
+// 6. Key marked as used in HSM
+await hsm.markKeyAsUsed(ephemeralKey.keyId);
+```
+
+### **Destruction Phase:**
+```typescript
+// 7. Transaction broadcast to Stellar
+await stellar.submitTransaction(signedTransaction);
+
+// 8. HSM automatically destroys ephemeral key
+await hsm.destroyEphemeralKey(ephemeralKey.keyId);
+
+// 9. Database records key destruction
+await updateTransactionKey({
+  isUsed: true,
+  isExpired: true,
+  destroyedAt: new Date()
+});
+```
+
+## 🛡️ **PRIVACY PROTECTION BENEFITS**
+
+### **Address Isolation:**
+- **Cold Wallet**: `GCVP...URKI` (static, for receiving large deposits)
+- **Hot Wallet**: `GCMF...DPFM` (static, for receiving operational funds)
+- **Transaction #1**: `GXYZ...ABCD` (ephemeral, dies after TX #1)
+- **Transaction #2**: `GHIJ...EFGH` (ephemeral, dies after TX #2)
+- **Transaction #3**: `GKLM...IJKL` (ephemeral, dies after TX #3)
+
+### **Correlation Protection:**
+```typescript
+// External observer CANNOT determine:
+❌ "That GXYZ...ABCD came from the same wallet as GHIJ...EFGH"
+❌ "That these transactions are from the same user"
+❌ "The relationship between Cold/Hot and transaction addresses"
+❌ "The total balance or transaction patterns"
+
+// External observer CAN ONLY see:
+✅ "Individual transaction from random address to destination"
+✅ "Transaction amounts and memos (if not encrypted)"
+✅ "Stellar network fees and timing"
+```
+
+## 🔧 **IMPLEMENTATION REQUIREMENTS**
+
+### **1. TransactionKeyService (NEW)**
+```typescript
+// apps/backend/src/wallets/transaction-key.service.ts
+class TransactionKeyService {
+  // Generate ephemeral key per transaction
+  async generateEphemeralKey(transactionId: string): Promise<EphemeralKey>
+  
+  // Use key for signing (one-time only)
+  async useKeyForSigning(keyId: string, totpCode: string): Promise<Signature>
+  
+  // Clean expired keys (scheduled task)
+  async cleanExpiredKeys(): Promise<number>
+  
+  // Monitor key lifecycle
+  async getKeyStatistics(): Promise<KeyStats>
+}
+```
+
+### **2. HSM API Extensions (REQUIRED)**
+```typescript
+// HSM DINAMO API requirements for ephemeral keys:
+interface EphemeralKeyConfig {
+  temporary: true;           // Mark as temporary in HSM
+  expiresIn: number;        // Auto-expiry time (seconds)
+  oneTimeUse: true;         // Single signature only
+  autoDestroy: true;        // Auto-destroy after use
+  maxSignatures: 1;         // Enforce single use
+}
+```
+
+### **3. Database Schema (UPDATED)**
+```prisma
+// Already added TransactionKey model to schema.mdc
+model TransactionKey {
+  // Lifecycle tracking
+  isActive: Boolean
+  isUsed: Boolean
+  isExpired: Boolean
+  expiresAt: DateTime
+  destroyedAt: DateTime?
+  
+  // Privacy protection
+  publicKey: String @unique  // New address per transaction
+  transactionIndex: Int      // Incremental per wallet
+}
+```
+
+## 🌐 **STELLAR NETWORK INTEGRATION**
+
+### **Smart Contract Compatibility:**
+The Soroban smart contract is **PERFECT** for ephemeral keys because:
+- ✅ **Address agnostic**: Validates any Stellar address
+- ✅ **Signature validation**: Works with Ed25519 signatures from any key
+- ✅ **No source tracking**: Contract doesn't care about key derivation
+- ✅ **Multi-sig logic**: Works with static or ephemeral guardian keys
+
+### **Privacy on Stellar Explorer:**
+```
+External Analysis via Stellar Explorer:
+❌ Cannot trace: "This TX came from Hot Wallet"
+❌ Cannot trace: "These TXs are related"  
+❌ Cannot trace: "This is the same user"
+✅ Can see: Individual transaction details only
+✅ Can see: Public destination addresses
+✅ Can see: Transaction amounts (unless encrypted)
+```
+
+## 📊 **TRANSACTION FLOW (UPDATED)**
+
+### **1. Hot Wallet Transactions:**
+```typescript
+// Small amounts (< 1000 XLM) - Auto-execute with privacy
+1. Generate ephemeral key: m/0'/0'/N'
+2. Create transaction with NEW ADDRESS as source
+3. Auto-execute (no guardian approval needed)
+4. HSM destroys ephemeral key
+5. Transaction appears from "random" address
+```
+
+### **2. High-Value Transactions:**
+```typescript
+// Medium amounts (1K-10K XLM) - 2-of-3 approval with privacy
+1. Generate ephemeral key: m/0'/0'/N'
+2. Create transaction with NEW ADDRESS as source
+3. Generate OCRA-like challenge
+4. Send WhatsApp to guardians
+5. Collect 2 approvals with challenge-response
+6. HSM signs with ephemeral key
+7. HSM destroys ephemeral key
+8. Transaction appears from "random" address
+```
+
+### **3. Critical Cold Wallet Transactions:**
+```typescript
+// Large amounts (> 10K XLM) - 3-of-3 approval
+1. Generate ephemeral key: m/0'/0'/N' 
+2. Create transaction with NEW ADDRESS as source
+3. Generate OCRA-like challenge
+4. Send enhanced WhatsApp with TOTP images
+5. Collect ALL 3 approvals with challenge-response
+6. HSM signs with ephemeral key
+7. HSM destroys ephemeral key
+8. Transaction appears from "random" address
+```
+
+## 🎨 **CORPORATE INTERFACE REQUIREMENTS**
+
+### **Enterprise UI/UX Standards:**
+- ✅ **Professional color scheme**: Dark blues, grays, corporate whites
+- ✅ **Clean typography**: Sans-serif, readable fonts
+- ✅ **Dashboard layout**: Executive summary + detailed views
+- ✅ **Security indicators**: Clear visual security status
+- ✅ **Audit trails**: Complete transaction history views
+- ✅ **Guardian management**: Role-based access control UI
+- ✅ **Mobile responsive**: Works on executive mobile devices
+- ✅ **Print-friendly**: For compliance reporting
+
+### **Corporate Features:**
+- ✅ **Executive dashboard**: High-level metrics and status
+- ✅ **Compliance reporting**: Audit-ready transaction reports
+- ✅ **Role-based views**: Different interfaces per guardian role
+- ✅ **Security monitoring**: Real-time security status
+- ✅ **Bulk operations**: Batch transaction processing
+- ✅ **Emergency controls**: Clear emergency shutdown procedures
+
+## ✅ **IMPLEMENTATION STATUS**
+
+### **🔐 Backend (98% Complete):**
+- ✅ **HSM Integration**: DINAMO API implemented
+- ✅ **3-Guardian System**: CEO, CFO, CTO working
+- ✅ **OCRA-like Challenges**: Challenge-response implemented
+- ❌ **Transaction Keys**: NEEDS IMPLEMENTATION (critical)
+- ❌ **Key Lifecycle**: NEEDS IMPLEMENTATION (critical)
+
+### **🤖 Smart Contract (100% Complete):**
+- ✅ **Address flexibility**: Works with any Stellar address
+- ✅ **Multi-sig logic**: 2-of-3 and 3-of-3 implemented
+- ✅ **Signature validation**: Ed25519 validation working
+- ✅ **No changes needed**: Perfect for ephemeral keys
+
+### **🎨 Frontend (0% Complete):**
+- ❌ **Corporate interface**: NEEDS IMPLEMENTATION
+- ❌ **Guardian dashboard**: NEEDS IMPLEMENTATION
+- ❌ **Transaction management**: NEEDS IMPLEMENTATION
+
+## 🚀 **NEXT STEPS TO COMPLETE VISION**
+
+### **Priority 1: Transaction Keys (Critical)**
+1. **Implement TransactionKeyService** in backend
+2. **Update Prisma schema** with TransactionKey model
+3. **Update HSMService** for ephemeral key management
+4. **Test privacy protection** - verify address isolation
+
+### **Priority 2: Corporate Frontend (High)**
+1. **Next.js 15 corporate dashboard**
+2. **Professional UI components**
+3. **Role-based guardian interfaces**
+4. **Executive reporting views**
+
+### **Priority 3: Enhanced Privacy (Medium)**
+1. **Memo encryption** (optional)
+2. **Amount obfuscation** (optional)
+3. **Timing randomization** (optional)
+
+---
+
+**The transaction privacy system with ephemeral keys is CRITICAL for the complete solution as discussed by the developers!**

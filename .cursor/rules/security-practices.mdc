@@ -1,0 +1,781 @@
+---
+description: Security best practices and implementation guidelines for Stellar Custody MVP
+globs: "**/auth/**,**/security/**,**/middleware/**,*.env*"
+---
+
+# 🔒 SECURITY BEST PRACTICES - STELLAR CUSTODY MVP
+
+## Overview
+
+This rule enforces security best practices throughout the Stellar Custody system. **Security is the #1 priority** - always choose the most secure option.
+
+## 🛡️ Core Security Principles
+
+### 1. Defense in Depth
+- Multiple layers of security
+- Never rely on a single security measure
+- Assume every layer can fail
+
+### 2. Least Privilege
+- Grant minimum permissions necessary
+- Separate roles and responsibilities
+- Time-limited access when possible
+
+### 3. Zero Trust
+- Verify everything, trust nothing
+- Authenticate and authorize every request
+- Log all actions for audit
+
+## 🔑 Key Management (HSM DINAMO Architecture)
+
+### Critical HSM Security Rules
+```typescript
+// NEVER do this:
+// ❌ const privateKey = process.env.PRIVATE_KEY;
+// ❌ const key = fs.readFileSync('key.pem');
+// ❌ Store keys in database or local files
+// ❌ Export private keys from HSM
+
+// ALWAYS do this:
+// ✅ Use HSM partitions for key isolation
+// ✅ TOTP authorization for key release
+// ✅ BIP32 hierarchical derivation
+// ✅ Cold wallet as master (m/0'), Hot as derived (m/0'/0')
+
+const partitionId = await hsm.createPartition(`user_${userId}`);
+const keyId = await hsm.generateBIP32Key({ partition: partitionId });
+const signature = await hsm.signWithTOTPAuth(keyId, totpCode, data);
+```
+
+### HSM Partition Management
+```typescript
+// Each user gets individual HSM partition
+class HSMPartitionManager {
+  async createUserPartition(userId: string, kycData: KYCData) {
+    // 1. Generate partition ID from KYC hash
+    const partitionId = `user_${crypto.createHash('sha256')
+      .update(JSON.stringify(kycData))
+      .digest('hex')}`;
+    
+    // 2. Create isolated partition
+    await hsm.createPartition(partitionId);
+    
+    // 3. Generate AES key for PII encryption
+    const aesKeyId = await hsm.generateAESKey({
+      partition: partitionId,
+      keySize: 256,
+      purpose: 'PII_ENCRYPTION'
+    });
+    
+    // 4. Generate BIP32 master key
+    const masterKeyId = await hsm.generateBIP32Key({
+      partition: partitionId,
+      algorithm: 'ED25519',
+      purpose: 'STELLAR_MASTER'
+    });
+    
+    return { partitionId, aesKeyId, masterKeyId };
+  }
+  
+  // Derive complete wallet hierarchy with ephemeral transaction keys
+  async deriveCompleteWalletHierarchy(partitionId: string, masterKeyId: string) {
+    // 1. Cold wallet (master) - 95% of funds
+    const coldKeyId = await hsm.deriveKey({
+      parentKey: masterKeyId,
+      derivationPath: "m/0'",
+      partition: partitionId,
+      purpose: "cold_storage"
+    });
+    
+    // 2. Hot wallet (derived from cold) - 5% of funds
+    const hotKeyId = await hsm.deriveKey({
+      parentKey: coldKeyId,
+      derivationPath: "m/0'/0'", 
+      partition: partitionId,
+      purpose: "operational_funds"
+    });
+    
+    return { 
+      masterKeyId,
+      coldKeyId, 
+      hotKeyId,
+      // Transaction keys will be derived dynamically per transaction
+      nextTransactionIndex: 0
+    };
+  }
+  
+  // Generate ephemeral transaction key (m/0'/0'/N')
+  async generateEphemeralTransactionKey(
+    hotKeyId: string,
+    transactionIndex: number,
+    partitionId: string
+  ) {
+    const derivationPath = `m/0'/0'/${transactionIndex}'`;
+    
+    // Create temporary key in HSM with auto-expiry
+    const transactionKeyId = await hsm.deriveKey({
+      parentKey: hotKeyId,
+      derivationPath: derivationPath,
+      partition: partitionId,
+      purpose: "transaction_signing",
+      temporary: true,           // HSM will auto-destroy
+      expiresIn: 3600,          // 1 hour expiry
+      oneTimeUse: true,         // Single use only
+      autoDestroy: true         // Auto-destroy after use
+    });
+    
+    return {
+      keyId: transactionKeyId,
+      derivationPath: derivationPath,
+      expiresAt: new Date(Date.now() + 3600000),
+      isEphemeral: true
+    };
+  }
+}
+```
+
+### Key Rotation Schedule  
+```typescript
+// HSM DINAMO key rotation policy
+const KEY_ROTATION_SCHEDULE = {
+  MASTER_KEY: 365,      // 1 year
+  COLD_WALLET: 180,     // 6 months  
+  HOT_WALLET: 90,       // 3 months
+  AES_PII_KEY: 90,      // 3 months
+  TOTP_SECRET: 365      // 1 year
+};
+```
+
+## 🔐 Authentication & Authorization
+
+### Multi-Factor Authentication
+```typescript
+// Guardian login requires:
+// 1. Email + Password
+// 2. TOTP verification
+// 3. Optional: WebAuthn/Passkey
+
+async authenticateGuardian(credentials: LoginDto) {
+  // Step 1: Verify password
+  const user = await this.validatePassword(credentials);
+  
+  // Step 2: Generate session token (short-lived)
+  const sessionToken = this.generateToken(user, '15m');
+  
+  // Step 3: Require TOTP for sensitive actions
+  return {
+    sessionToken,
+    requiresTOTP: true,
+    totpChallenge: uuid()
+  };
+}
+```
+
+### TOTP + Challenge Implementation (OCRA-like HSM Key Release)
+```typescript
+import { authenticator } from 'otplib';
+
+// Configure TOTP for HSM integration
+authenticator.options = {
+  window: 1,              // Allow 1 step tolerance
+  digits: 6,              // 6-digit codes
+  step: 30,               // 30 second intervals
+  crypto: crypto          // Use Node crypto
+};
+
+// Prevent replay attacks with Redis for production
+const usedCodes = new Set<string>();
+
+// OCRA-like Challenge + TOTP validates and authorizes HSM key release  
+async validateChallengeResponseAndReleaseKey(
+  guardianId: string,
+  code: string,
+  challenge: string, // Transaction-specific challenge
+  purpose: 'transaction_signing' | 'key_generation' | 'partition_access'
+) {
+  const key = `${guardianId}:${code}`;
+  
+  // 1. Check replay attack
+  if (usedCodes.has(key)) {
+    throw new Error('TOTP code already used');
+  }
+  
+  // 2. Get guardian with HSM partition info
+  const guardian = await prisma.guardian.findUnique({
+    where: { id: guardianId },
+    include: { user: true }
+  });
+  
+  if (!guardian?.user?.hsmPartitionId) {
+    throw new Error('Guardian HSM partition not found');
+  }
+  
+  // 3. Generate contextual secret using OCRA-like challenge
+  const challengeHash = crypto.createHash('sha256').update(challenge).digest('hex');
+  const contextualSecret = decrypt(guardian.totpSecret) + challengeHash.substring(0, 8);
+  
+  // 4. Validate challenge-response code (OCRA-like)
+  const isValid = authenticator.verify({
+    token: code,
+    secret: contextualSecret
+  });
+  
+  // 5. Also validate against pure TOTP for backwards compatibility
+  const isValidTotp = authenticator.verify({
+    token: code,
+    secret: decrypt(guardian.totpSecret)
+  });
+  
+  // Accept either OCRA-like challenge-response OR pure TOTP
+  if (!isValid && !isValidTotp) {
+    // Log failed attempt for security monitoring
+    await logAuditEvent({
+      action: 'challenge_response.validation.failed',
+      userId: guardianId,
+      result: 'failure',
+      metadata: { purpose, challenge: challenge.substring(0, 20) + '...' }
+    });
+    throw new Error('Invalid challenge-response or TOTP code');
+  }
+  
+  const authMethod = isValid ? 'OCRA_LIKE' : 'TOTP_FALLBACK';
+  
+  // 4. TOTP is valid - authorize HSM key release
+  try {
+    const keyReleaseAuth = await hsm.authorizeKeyRelease({
+      partition: guardian.user.hsmPartitionId,
+      keyId: guardian.user.hsmKeyName,
+      totpCode: code,
+      purpose: purpose,
+      guardianId: guardianId
+    });
+    
+    if (!keyReleaseAuth.success) {
+      throw new Error('HSM denied key release authorization');
+    }
+    
+    // 5. Mark TOTP as used and log success
+    usedCodes.add(key);
+    setTimeout(() => usedCodes.delete(key), 90000);
+    
+    await logAuditEvent({
+      action: 'challenge_response.hsm.key_release_authorized',
+      userId: guardianId,
+      result: 'success',
+      metadata: { 
+        purpose, 
+        authMethod,
+        challenge: challenge.substring(0, 20) + '...',
+        hsmPartition: guardian.user.hsmPartitionId,
+        keyReleaseId: keyReleaseAuth.releaseId
+      }
+    });
+    
+    return {
+      valid: true,
+      keyReleaseId: keyReleaseAuth.releaseId,
+      partitionId: guardian.user.hsmPartitionId,
+      keyId: guardian.user.hsmKeyName
+    };
+    
+  } catch (error) {
+    await logAuditEvent({
+      action: 'totp.hsm.key_release_failed',
+      userId: guardianId,
+      result: 'failure',
+      metadata: { purpose, error: error.message }
+    });
+    throw error;
+  }
+}
+
+// OCRA-like Challenge-Response for transaction signing (3 guardiões)
+async validateChallengeResponseForTransaction(
+  guardianId: string,
+  responseCode: string,
+  transactionId: string,
+  amount: string,
+  toAddress: string
+) {
+  // 1. Generate transaction-specific challenge (OCRA-like)
+  const challenge = `stellar_tx:${transactionId}:${amount}:${toAddress}:${Date.now()}`;
+  const challengeHash = crypto.createHash('sha256').update(challenge).digest('hex');
+  
+  // 2. Validate challenge-response with HSM key release
+  const authResult = await validateChallengeResponseAndReleaseKey(
+    guardianId,
+    responseCode,
+    challenge,
+    'transaction_signing'
+  );
+  
+  // 3. HSM signs the transaction with the released key
+  const rawTransaction = await buildRawTransaction({
+    transactionId,
+    amount,
+    toAddress
+  });
+  
+  const signature = await hsm.sign({
+    keyId: authResult.keyId,
+    data: Buffer.from(rawTransaction, 'hex'),
+    algorithm: 'ED25519',
+    releaseId: authResult.keyReleaseId,
+    challenge: challengeHash // Link challenge to signature
+  });
+  
+  return {
+    signature: signature.toString('hex'),
+    hsmPartition: authResult.partitionId,
+    keyReleaseId: authResult.keyReleaseId,
+    challenge: challengeHash,
+    authMethod: 'OCRA_LIKE_CHALLENGE_RESPONSE',
+    signedAt: new Date()
+  };
+}
+
+// Generate transaction challenge for guardian app
+async generateTransactionChallenge(transactionId: string) {
+  const transaction = await prisma.transaction.findUnique({
+    where: { id: transactionId }
+  });
+  
+  const challenge = `stellar_tx:${transactionId}:${transaction.amount}:${transaction.toAddress}:${Date.now()}`;
+  const challengeHash = crypto.createHash('sha256').update(challenge).digest('hex');
+  
+  // Store challenge temporarily (5 minutes expiry)
+  await redis.setex(`challenge:${transactionId}:${challengeHash}`, 300, JSON.stringify({
+    transactionId,
+    amount: transaction.amount,
+    toAddress: transaction.toAddress,
+    createdAt: Date.now()
+  }));
+  
+  return {
+    challenge: challengeHash.substring(0, 16), // Show short version to guardian
+    fullChallenge: challenge,
+    expiresIn: 300 // 5 minutes
+  };
+}
+```
+
+## 🔒 Encryption Standards
+
+### Data at Rest
+```typescript
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+
+const ALGORITHM = 'aes-256-gcm';
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex'); // 32 bytes
+
+function encrypt(text: string): string {
+  const iv = randomBytes(16);
+  const cipher = createCipheriv(ALGORITHM, KEY, iv);
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const authTag = cipher.getAuthTag();
+  
+  return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(encryptedData: string): string {
+  const parts = encryptedData.split(':');
+  const iv = Buffer.from(parts[0], 'hex');
+  const authTag = Buffer.from(parts[1], 'hex');
+  const encrypted = parts[2];
+  
+  const decipher = createDecipheriv(ALGORITHM, KEY, iv);
+  decipher.setAuthTag(authTag);
+  
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  
+  return decrypted;
+}
+```
+
+### Sensitive Data Storage
+```typescript
+// Fields that MUST be encrypted:
+const ENCRYPTED_FIELDS = [
+  'user.totpSecret',
+  'guardian.totpSecret',
+  'notification.whatsappMessageId',
+  'approval.ipAddress'
+];
+
+// Fields that MUST be hashed:
+const HASHED_FIELDS = [
+  'user.passwordHash',    // bcrypt
+  'user.email',           // for lookups - use HMAC
+  'user.phone'           // for lookups - use HMAC
+];
+```
+
+## 🚨 Input Validation
+
+### Request Validation
+```typescript
+import { z } from 'zod';
+
+// Transaction validation schema
+const createTransactionSchema = z.object({
+  amount: z.string()
+    .regex(/^\d+(\.\d{1,7})?$/, 'Invalid amount format')
+    .refine(val => parseFloat(val) > 0, 'Amount must be positive')
+    .refine(val => parseFloat(val) <= 1000000, 'Amount exceeds maximum'),
+    
+  toAddress: z.string()
+    .length(56, 'Invalid Stellar address')
+    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar address format'),
+    
+  memo: z.string()
+    .max(28, 'Memo too long')
+    .regex(/^[a-zA-Z0-9\s]*$/, 'Invalid memo characters')
+    .optional()
+});
+
+// SQL injection prevention
+const sanitizeInput = (input: string): string => {
+  return input.replace(/[^a-zA-Z0-9\s]/g, '');
+};
+```
+
+## 🔐 mTLS (Mutual TLS) Implementation
+
+### NestJS mTLS Configuration
+```typescript
+import { NestFactory } from '@nestjs/core';
+import * as https from 'https';
+import * as fs from 'fs';
+
+async function bootstrap() {
+  // Load mTLS certificates
+  const certificates = {
+    // Server certificate (backend)
+    cert: fs.readFileSync('/path/to/server.crt'),
+    key: fs.readFileSync('/path/to/server.key'),
+    
+    // CA certificate for client validation
+    ca: fs.readFileSync('/path/to/ca.crt'),
+    
+    // Require client certificates
+    requestCert: true,
+    rejectUnauthorized: true
+  };
+  
+  // Create HTTPS server with mTLS
+  const app = await NestFactory.create(AppModule, {
+    httpsOptions: certificates
+  });
+  
+  // Custom certificate validation middleware
+  app.use((req, res, next) => {
+    const clientCert = req.connection.getPeerCertificate();
+    
+    if (!clientCert || !clientCert.subject) {
+      return res.status(401).json({ error: 'Client certificate required' });
+    }
+    
+    // Validate certificate subject
+    const allowedSubjects = [
+      'guardian-',
+      'hsm-dinamo',
+      'admin-dashboard'
+    ];
+    
+    const isAuthorized = allowedSubjects.some(subject => 
+      clientCert.subject.CN?.startsWith(subject)
+    );
+    
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Invalid client certificate' });
+    }
+    
+    // Add certificate info to request
+    req.clientCert = clientCert;
+    next();
+  });
+  
+  await app.listen(443);
+}
+```
+
+### HSM DINAMO mTLS Client
+```typescript
+class SecureHSMClient {
+  private httpsAgent: https.Agent;
+  
+  constructor() {
+    this.httpsAgent = new https.Agent({
+      // Client certificate for authentication to HSM
+      cert: fs.readFileSync('/path/to/client.crt'),
+      key: fs.readFileSync('/path/to/client.key'),
+      
+      // CA to validate HSM server certificate
+      ca: fs.readFileSync('/path/to/hsm-ca.crt'),
+      
+      // Mutual authentication required
+      requestCert: true,
+      rejectUnauthorized: true,
+      
+      // Additional security
+      secureProtocol: 'TLSv1_3_method', // Force TLS 1.3
+      honorCipherOrder: true,
+      ciphers: [
+        'TLS_AES_256_GCM_SHA384',
+        'TLS_CHACHA20_POLY1305_SHA256',
+        'ECDHE-RSA-AES256-GCM-SHA384'
+      ].join(':')
+    });
+  }
+  
+  async authenticatedRequest(endpoint: string, data: any) {
+    try {
+      const response = await axios.post(`https://${HSM_HOST}:${HSM_PORT}${endpoint}`, data, {
+        httpsAgent: this.httpsAgent,
+        timeout: 30000,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-HSM-Client-ID': process.env.HSM_CLIENT_ID
+        }
+      });
+      
+      return response.data;
+    } catch (error) {
+      await this.logSecurityEvent({
+        event: 'hsm_mtls_connection_failed',
+        error: error.message,
+        endpoint
+      });
+      throw error;
+    }
+  }
+}
+```
+
+## 🔍 Enhanced Security Headers
+
+### Express Middleware with mTLS Support
+```typescript
+import helmet from 'helmet';
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "wss:", "https:"],
+      frameAncestors: ["'none'"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  // Force HTTPS
+  forceHTTPS: true,
+  // Require certificate-based authentication
+  expectCt: {
+    enforce: true,
+    maxAge: 30,
+    reportUri: '/security/ct-report'
+  }
+}));
+
+// mTLS-aware CORS
+app.use(cors({
+  origin: (origin, callback) => {
+    // Only allow origins with valid certificates
+    const allowedOrigins = process.env.MTLS_ALLOWED_ORIGINS?.split(',') || [];
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS - certificate required'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Client-Cert-CN']
+}));
+```
+
+## 📝 Audit Logging
+
+### Comprehensive Logging
+```typescript
+interface AuditLog {
+  timestamp: Date;
+  userId: string;
+  action: string;
+  resource: string;
+  ip: string;
+  userAgent: string;
+  result: 'success' | 'failure';
+  metadata?: any;
+}
+
+async logAuditEvent(event: AuditLog) {
+  // Log to database
+  await prisma.auditLog.create({ data: event });
+  
+  // Critical events to external service
+  if (CRITICAL_ACTIONS.includes(event.action)) {
+    await sendToSIEM(event);
+  }
+}
+
+const CRITICAL_ACTIONS = [
+  'guardian.create',
+  'guardian.delete',
+  'transaction.approve',
+  'transaction.execute',
+  'key.rotate',
+  'emergency.recovery'
+];
+```
+
+## 🚦 Rate Limiting
+
+### Endpoint Protection
+```typescript
+const rateLimits = {
+  // Authentication endpoints
+  '/auth/login': { windowMs: 15 * 60 * 1000, max: 5 },
+  '/auth/totp': { windowMs: 15 * 60 * 1000, max: 10 },
+  
+  // Transaction endpoints
+  '/transactions/create': { windowMs: 60 * 1000, max: 10 },
+  '/transactions/approve': { windowMs: 60 * 1000, max: 20 },
+  
+  // General API
+  'default': { windowMs: 15 * 60 * 1000, max: 100 }
+};
+```
+
+## 🔄 Session Management
+
+### Secure Sessions
+```typescript
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: true,              // HTTPS only
+    httpOnly: true,            // No JS access
+    maxAge: 15 * 60 * 1000,    // 15 minutes
+    sameSite: 'strict'         // CSRF protection
+  },
+  name: 'stellar-custody-sid'  // Custom name
+};
+
+// Automatic session renewal
+app.use((req, res, next) => {
+  if (req.session.userId) {
+    req.session.touch(); // Extend session
+  }
+  next();
+});
+```
+
+## 🚨 Emergency Procedures
+
+### Panic Button Implementation
+```typescript
+// Emergency shutdown procedure
+async emergencyShutdown(reason: string, initiatorId: string) {
+  // 1. Log emergency event
+  await logAuditEvent({
+    action: 'emergency.shutdown',
+    userId: initiatorId,
+    metadata: { reason }
+  });
+  
+  // 2. Disable all guardians
+  await prisma.guardian.updateMany({
+    data: { isActive: false }
+  });
+  
+  // 3. Lock all wallets
+  await hsm.lockAllKeys();
+  
+  // 4. Notify all stakeholders
+  await notifyEmergency('SYSTEM_SHUTDOWN', reason);
+  
+  // 5. Graceful shutdown
+  process.exit(0);
+}
+```
+
+## 🧪 Security Testing
+
+### Required Security Tests
+```typescript
+describe('Security Tests', () => {
+  it('should prevent SQL injection', async () => {
+    const maliciousInput = "'; DROP TABLE users; --";
+    const response = await request(app)
+      .post('/api/search')
+      .send({ query: maliciousInput });
+      
+    expect(response.status).toBe(400);
+  });
+  
+  it('should enforce rate limits', async () => {
+    for (let i = 0; i < 6; i++) {
+      await request(app).post('/auth/login').send(credentials);
+    }
+    
+    const response = await request(app)
+      .post('/auth/login')
+      .send(credentials);
+      
+    expect(response.status).toBe(429);
+  });
+  
+  it('should validate TOTP window', async () => {
+    const oldCode = authenticator.generate(secret);
+    
+    // Wait 2 minutes
+    await new Promise(resolve => setTimeout(resolve, 120000));
+    
+    const response = await request(app)
+      .post('/auth/totp')
+      .send({ code: oldCode });
+      
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+## 📋 Security Checklist
+
+Before deploying:
+- [ ] All keys in HSM
+- [ ] TOTP enabled for all guardians
+- [ ] Rate limiting configured
+- [ ] Security headers set
+- [ ] Input validation on all endpoints
+- [ ] Audit logging enabled
+- [ ] Emergency procedures tested
+- [ ] Penetration testing completed
+- [ ] SSL/TLS certificates valid
+- [ ] Secrets rotated
+
+## Cross-References
+
+- Main spec: [stellar-custody-mvp.mdc](mdc:.cursor/rules/stellar-custody-mvp.mdc)
+- API guide: [api-integrations.mdc](mdc:.cursor/rules/api-integrations.mdc)
+- Schema: [schema.mdc](mdc:.cursor/rules/schema.mdc)
+- Index: [index.mdc](mdc:.cursor/rules/index.mdc)
+
+---
+
+**Security is not optional - it's mandatory in every line of code!**

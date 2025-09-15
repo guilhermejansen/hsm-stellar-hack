@@ -1,0 +1,70 @@
+# ==================== STELLAR CUSTODY MVP - DOCKER IGNORE ====================
+# 🐳 Optimize Docker build by excluding unnecessary files
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist
+build
+.next
+
+# Development files
+.env*
+!_env.example
+*.log
+logs/
+
+# Source maps
+*.map
+
+# Test files
+test/
+coverage/
+*.spec.ts
+*.test.ts
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+!package.json
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Development scripts
+scripts/build.sh
+scripts/start.sh
+
+# Database files
+*.db
+*.sqlite
+
+# Certificates (should be mounted)
+certs/
+*.pem
+*.crt
+*.key
+
+# Backup files
+*.bak
+*.backup

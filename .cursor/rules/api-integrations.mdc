@@ -1,0 +1,750 @@
+---
+description: API integrations guide for WhatsApp, Stellar, HSM and external services
+globs: "**/whatsapp/**,**/stellar/**,**/hsm/**,**/api/**"
+---
+
+# 🔌 API INTEGRATIONS - STELLAR CUSTODY MVP
+
+## Overview
+
+This rule covers all external API integrations including WhatsApp (ZuckZapGo), Stellar blockchain, HSM DINAMO, and other services.
+
+## 📱 WhatsApp Integration (ZuckZapGo)
+
+### API Configuration
+```typescript
+// Base URL: https://api.zuckzapgo.com
+// Token: !!qYWdJ61zk3i1AvTfXhzE!!
+```
+
+### Message Types Implementation
+
+#### 1. Text Messages
+```typescript
+async sendText(phone: string, message: string) {
+  const response = await axios.post(
+    'https://api.zuckzapgo.com/chat/send/text',
+    {
+      Phone: phone,
+      Body: message,
+      Presence: 3000,
+      Duration: 86400,
+      LinkPreview: true,
+      NumberCheck: true
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'token': process.env.WHATSAPP_TOKEN
+      }
+    }
+  );
+  return response.data;
+}
+```
+
+#### 2. Button Messages (For Approvals)
+```typescript
+async sendApprovalButton(guardian: Guardian, transaction: Transaction) {
+  const approvalUrl = `${process.env.FRONTEND_URL}/approve/${transaction.id}?guardian=${guardian.id}`;
+  
+  return await axios.post(
+    'https://api.zuckzapgo.com/chat/send/buttons',
+    {
+      phone: '55' + guardian.user.phone,
+      title: '⚠️ Aprovação Necessária',
+      body: `Transação #${transaction.id.slice(-6)}\n💰 ${transaction.amount} XLM`,
+      image: {
+        url: `https://api.qrserver.com/v1/create-qr-code/?data=${approvalUrl}`
+      },
+      buttons: [{
+        buttonId: 'approve_tx',
+        buttonText: { displayText: '✅ Aprovar Agora' },
+        type: 'cta_url',
+        url: approvalUrl
+      }],
+      footer: `Guardião: ${guardian.role}`
+    },
+    { headers: { 'token': process.env.WHATSAPP_TOKEN } }
+  );
+}
+```
+
+#### 3. Stickers (Success Confirmation)
+```typescript
+async sendSuccessSticker(phone: string) {
+  // Use base64 encoded webp sticker
+  const successSticker = fs.readFileSync('assets/success-sticker.webp', 'base64');
+  
+  return await axios.post(
+    'https://api.zuckzapgo.com/chat/send/sticker',
+    {
+      Phone: phone,
+      Sticker: `data:image/webp;base64,${successSticker}`
+    },
+    { headers: { 'token': process.env.WHATSAPP_TOKEN } }
+  );
+}
+```
+
+## 🌟 Stellar Integration
+
+### Network Configuration
+```typescript
+// Testnet
+const server = new StellarSdk.SorobanRpc.Server('https://soroban-testnet.stellar.org');
+const horizonServer = new StellarSdk.Horizon.Server('https://horizon-testnet.stellar.org');
+
+// Mainnet (Production)
+const server = new StellarSdk.SorobanRpc.Server('https://soroban.stellar.org');
+const horizonServer = new StellarSdk.Horizon.Server('https://horizon.stellar.org');
+```
+
+### Transaction Building
+```typescript
+async buildTransaction(params: {
+  source: string;
+  destination: string;
+  amount: string;
+  memo?: string;
+}) {
+  const account = await horizonServer.loadAccount(params.source);
+  
+  const transaction = new StellarSdk.TransactionBuilder(account, {
+    fee: await horizonServer.fetchBaseFee(),
+    networkPassphrase: StellarSdk.Networks.TESTNET
+  })
+  .addOperation(StellarSdk.Operation.payment({
+    destination: params.destination,
+    asset: StellarSdk.Asset.native(),
+    amount: params.amount
+  }))
+  .addMemo(params.memo ? StellarSdk.Memo.text(params.memo) : StellarSdk.Memo.none())
+  .setTimeout(180)
+  .build();
+  
+  return transaction;
+}
+```
+
+### Account Creation (Testnet)
+```typescript
+async createTestnetAccount(publicKey: string) {
+  try {
+    const response = await axios.get(
+      `https://friendbot.stellar.org?addr=${publicKey}`
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Friendbot error:', error);
+    throw error;
+  }
+}
+```
+
+## 🔐 HSM DINAMO Integration (Complete Architecture)
+
+### Connection Setup
+```typescript
+import { HSMClient } from '@dinamonetworks/hsm-dinamo';
+
+const hsmConfig = {
+  host: process.env.HSM_HOST,        // 187.33.9.132
+  port: parseInt(process.env.HSM_PORT), // 4433
+  username: process.env.HSM_USERNAME,   // demoale
+  password: process.env.HSM_PASSWORD,   // 12345678
+  partition: process.env.HSM_PARTITION  // DEMO
+};
+
+const hsm = new HSMClient(hsmConfig);
+await hsm.connect();
+```
+
+### KYC User Workflow (Following HSM DINAMO Pattern)
+```typescript
+// Complete KYC process as shown in architecture diagram
+async createUserWithKYC(kycData: KYCData) {
+  // 1. Process KYC data
+  const pii = {
+    name: kycData.name,
+    docId: kycData.docId, // SSN, CPF, etc.
+    address: kycData.address,
+    phone: kycData.phone,
+    email: kycData.email
+  };
+  
+  // 2. Request random from HSM
+  const randomData = await hsm.generateRandom(32);
+  
+  // 3. Create user ID with SHA256
+  const userId = crypto.createHash('sha256')
+    .update(JSON.stringify(pii) + randomData)
+    .digest('hex');
+  
+  // 4. Create individual partition for user
+  const partitionId = `user_${userId}`;
+  await hsm.createPartition(partitionId);
+  
+  // 5. Create AES256 key for PII encryption
+  const aesKeyId = await hsm.generateAESKey({
+    partition: partitionId,
+    keySize: 256,
+    label: `aes_pii_${userId}`
+  });
+  
+  // 6. Create BIP32 Edwards XPRIV for Stellar
+  const masterKeyId = await hsm.generateBIP32Key({
+    partition: partitionId,
+    algorithm: 'ED25519',
+    label: `stellar_master_${userId}`,
+    derivationPath: 'm'
+  });
+  
+  // 7. Encrypt PII with AES key using Svault Module
+  const encryptedPII = await hsm.svaultEncrypt(aesKeyId, JSON.stringify(pii));
+  
+  return {
+    userId,
+    partitionId,
+    aesKeyId,
+    masterKeyId,
+    encryptedPII
+  };
+}
+```
+
+### Complete HD Wallet Hierarchy (Master → Cold → Hot → Transaction)
+```typescript
+// Create complete hierarchical wallet structure following BIP32 standard
+async createCompleteWalletHierarchy(userId: string, partitionId: string, masterKeyId: string) {
+  // 1. Master Key (m) - Root key in HSM partition
+  const masterKey = {
+    keyId: masterKeyId,
+    derivationPath: "m",
+    purpose: "root_key_generation"
+  };
+  
+  // 2. Cold Wallet (m/0') - Master wallet, 95% of funds
+  const coldKeyId = await hsm.deriveKey({
+    parentKey: masterKeyId,
+    derivationPath: "m/0'", // Cold wallet path
+    partition: partitionId,
+    purpose: "cold_storage",
+    requiresTOTP: true
+  });
+  
+  const coldPublicKey = await hsm.getPublicKey(coldKeyId);
+  const coldAddress = StellarSdk.StrKey.encodeEd25519PublicKey(coldPublicKey);
+  
+  // 3. Hot Wallet (m/0'/0') - Derived from Cold, 5% of funds  
+  const hotKeyId = await hsm.deriveKey({
+    parentKey: coldKeyId,
+    derivationPath: "m/0'/0'", // Hot wallet derived from cold
+    partition: partitionId,
+    purpose: "operational_funds",
+    requiresTOTP: false
+  });
+  
+  const hotPublicKey = await hsm.getPublicKey(hotKeyId);
+  const hotAddress = StellarSdk.StrKey.encodeEd25519PublicKey(hotPublicKey);
+  
+  return {
+    masterKey: {
+      keyId: masterKeyId,
+      derivationPath: "m",
+      purpose: "root"
+    },
+    coldWallet: {
+      keyId: coldKeyId,
+      address: coldAddress,
+      derivationPath: "m/0'",
+      maxBalance: "95%",
+      requiresTOTP: true,
+      isStatic: true // Static address for receiving
+    },
+    hotWallet: {
+      keyId: hotKeyId,  
+      address: hotAddress,
+      derivationPath: "m/0'/0'",
+      maxBalance: "5%",
+      requiresTOTP: false,
+      parentWallet: coldKeyId,
+      isStatic: true // Static address for receiving
+    }
+  };
+}
+
+// 4. Transaction Keys (m/0'/0'/N') - Ephemeral keys per transaction
+async generateEphemeralTransactionKey(
+  hotWalletKeyId: string,
+  transactionIndex: number,
+  partitionId: string
+) {
+  // Generate ephemeral key for this specific transaction
+  const transactionKeyId = await hsm.deriveKey({
+    parentKey: hotWalletKeyId,
+    derivationPath: `m/0'/0'/${transactionIndex}'`, // Unique per transaction
+    partition: partitionId,
+    purpose: "transaction_signing",
+    temporary: true,        // Mark as temporary in HSM
+    expiresIn: 3600,       // 1 hour expiry
+    autoDestroy: true      // Auto-destroy after use
+  });
+  
+  const transactionPublicKey = await hsm.getPublicKey(transactionKeyId);
+  const transactionAddress = StellarSdk.StrKey.encodeEd25519PublicKey(transactionPublicKey);
+  
+  return {
+    keyId: transactionKeyId,
+    address: transactionAddress,     // NEW ADDRESS PER TRANSACTION (privacy)
+    derivationPath: `m/0'/0'/${transactionIndex}'`,
+    expiresAt: new Date(Date.now() + 3600000), // 1 hour
+    isEphemeral: true,
+    parentWallet: hotWalletKeyId,
+    transactionIndex: transactionIndex
+  };
+}
+```
+
+### TOTP-Authorized Transaction Signing
+```typescript
+// Guardian uses TOTP to authorize HSM key release for signing
+async signTransactionWithTOTP(
+  guardianId: string, 
+  totpCode: string, 
+  rawTransaction: string
+) {
+  // 1. Validate TOTP first
+  const totpValid = await validateTOTP(guardianId, totpCode);
+  if (!totpValid) {
+    throw new Error('Invalid TOTP code');
+  }
+  
+  // 2. Get guardian's HSM partition and key
+  const guardian = await prisma.guardian.findUnique({
+    where: { id: guardianId },
+    include: { user: true }
+  });
+  
+  const partitionId = guardian.user.hsmPartitionId;
+  const keyId = guardian.user.hsmKeyName;
+  
+  // 3. TOTP authorizes HSM to release key for signing
+  const keyReleaseAuth = await hsm.authorizeKeyRelease({
+    partition: partitionId,
+    keyId: keyId,
+    totpCode: totpCode,
+    purpose: 'transaction_signing'
+  });
+  
+  if (!keyReleaseAuth.success) {
+    throw new Error('HSM denied key release');
+  }
+  
+  // 4. HSM signs the raw transaction
+  const signature = await hsm.sign({
+    keyId: keyId,
+    data: Buffer.from(rawTransaction, 'hex'),
+    algorithm: 'ED25519'
+  });
+  
+  // 5. Log the approval with HSM metadata
+  await prisma.approval.create({
+    data: {
+      guardianId,
+      transactionId,
+      totpValidatedAt: new Date(),
+      hsmKeyReleased: true,
+      hsmKeyReleasedAt: new Date(),
+      hsmSignature: signature.toString('hex'),
+      hsmPartitionUsed: partitionId,
+      isValid: true,
+      rawTransaction
+    }
+  });
+  
+  return signature;
+}
+```
+
+### Advanced Security Layers (M-de-N + mTLS)
+```typescript
+// M-de-N Threshold Signature Implementation
+class AdvancedThresholdService {
+  
+  // Configurar esquemas flexíveis baseados no valor da transação
+  async setupFlexibleThresholds() {
+    const schemes = {
+      // Transações pequenas: 2-of-3
+      LOW_VALUE: {
+        threshold: 2, 
+        total: 3,
+        maxAmount: 1000,
+        guardianRoles: ['CEO', 'CFO', 'CTO'],
+        challengeType: 'OCRA_LIKE' // Challenge-response OCRA-like
+      },
+      
+      // Transações médias: 2-of-3 com OCRA obrigatório
+      HIGH_VALUE: {
+        threshold: 2,
+        total: 3, 
+        maxAmount: 10000,
+        guardianRoles: ['CEO', 'CFO', 'CTO'],
+        challengeType: 'OCRA_LIKE_REQUIRED' // OCRA obrigatório
+      },
+      
+      // Cold wallet: 3-of-3 (todos os 3 guardiões)
+      CRITICAL: {
+        threshold: 3,
+        total: 3,
+        maxAmount: null, // Unlimited
+        guardianRoles: ['CEO', 'CFO', 'CTO'],
+        challengeType: 'OCRA_LIKE_REQUIRED' // OCRA obrigatório
+      }
+    };
+    
+    // Criar grupos threshold no HSM para cada esquema
+    for (const [type, config] of Object.entries(schemes)) {
+      const groupId = await hsm.createThresholdGroup({
+        threshold: config.threshold,
+        totalParties: config.total,
+        algorithm: 'ED25519',
+        groupName: `stellar_custody_${type.toLowerCase()}`
+      });
+      
+      // Distribuir shares entre guardians
+      const guardians = await this.getGuardiansByRoles(config.guardianRoles);
+      await this.distributeThresholdShares(groupId, guardians);
+    }
+  }
+  
+  // Assinar transação com esquema M-de-N apropriado
+  async signWithFlexibleThreshold(transaction: Transaction, approvals: Approval[]) {
+    // 1. Determinar esquema baseado no valor
+    const schemeType = this.determineSchemeType(transaction);
+    const scheme = await this.getThresholdScheme(schemeType);
+    
+    // 2. Validar se temos approvals suficientes
+    if (approvals.length < scheme.threshold) {
+      throw new Error(`Insufficient approvals: need ${scheme.threshold}, got ${approvals.length}`);
+    }
+    
+    // 3. Validar TOTP de cada guardian e coletar assinaturas parciais
+    const partialSignatures = [];
+    for (const approval of approvals.slice(0, scheme.threshold)) {
+      // Guardian usa TOTP para autorizar HSM a liberar sua share
+      const totpAuth = await this.validateTOTPAndReleaseShare(
+        approval.guardianId,
+        approval.totpCode,
+        scheme.groupId
+      );
+      
+      // HSM gera assinatura parcial com a share liberada
+      const partialSig = await hsm.partialSign({
+        groupId: scheme.groupId,
+        partitionId: totpAuth.partitionId,
+        shareIndex: totpAuth.shareIndex,
+        message: Buffer.from(transaction.rawData, 'hex'),
+        releaseId: totpAuth.keyReleaseId
+      });
+      
+      partialSignatures.push(partialSig);
+    }
+    
+    // 4. HSM combina assinaturas parciais em assinatura final
+    const finalSignature = await hsm.combinePartialSignatures({
+      groupId: scheme.groupId,
+      threshold: scheme.threshold,
+      partialSignatures,
+      message: Buffer.from(transaction.rawData, 'hex')
+    });
+    
+    return finalSignature;
+  }
+  
+  // Determinar esquema threshold baseado na transação (3 guardiões max)
+  private determineSchemeType(transaction: Transaction): ThresholdSchemeType {
+    if (transaction.amount < 1000) {
+      return ThresholdSchemeType.LOW_VALUE_2_OF_3; // 2 de 3 com OCRA-like opcional
+    } else if (transaction.amount < 10000) {
+      return ThresholdSchemeType.HIGH_VALUE_2_OF_3; // 2 de 3 com OCRA obrigatório
+    } else {
+      return ThresholdSchemeType.CRITICAL_3_OF_3; // 3 de 3 com OCRA obrigatório
+    }
+  }
+  
+  // Gerar challenge específico para transação (OCRA-like)
+  async generateTransactionChallenge(transaction: Transaction) {
+    const challengeData = {
+      transactionId: transaction.id,
+      amount: transaction.amount,
+      toAddress: transaction.toAddress,
+      fromWallet: transaction.fromWallet.publicKey,
+      timestamp: Date.now(),
+      nonce: crypto.randomBytes(8).toString('hex')
+    };
+    
+    const challenge = `STELLAR:${challengeData.transactionId}:${challengeData.amount}:${challengeData.toAddress}:${challengeData.timestamp}:${challengeData.nonce}`;
+    const challengeHash = crypto.createHash('sha256').update(challenge).digest('hex');
+    
+    // Store challenge for validation (expires in 5 minutes)
+    await redis.setex(
+      `tx_challenge:${transaction.id}`, 
+      300, 
+      JSON.stringify(challengeData)
+    );
+    
+    return {
+      challenge: challengeHash.substring(0, 16), // Display to guardian
+      fullChallenge: challenge,
+      expiresAt: Date.now() + 300000 // 5 minutes
+    };
+  }
+}
+```
+
+### mTLS Integration with HSM DINAMO
+```typescript
+// Secure mTLS communication with HSM
+class MTLSHSMIntegration {
+  async setupMTLSCertificates() {
+    // 1. Gerar certificados para cada componente
+    const certs = await this.generateCertificateChain({
+      // Root CA para toda a infraestrutura
+      rootCA: {
+        commonName: 'Stellar Custody Root CA',
+        validity: 3650 // 10 anos
+      },
+      
+      // Certificado do backend
+      backend: {
+        commonName: 'stellar-custody-backend',
+        subjectAltNames: ['localhost', '127.0.0.1', process.env.BACKEND_DOMAIN]
+      },
+      
+      // Certificado do HSM (se suportado)
+      hsm: {
+        commonName: 'hsm-dinamo-server',
+        subjectAltNames: [process.env.HSM_HOST]
+      },
+      
+      // Certificados dos guardians (individuais)
+      guardians: this.guardians.map(g => ({
+        commonName: `guardian-${g.role.toLowerCase()}`,
+        organizationUnit: g.role,
+        serialNumber: g.id
+      }))
+    });
+    
+    return certs;
+  }
+  
+  // Cliente HSM com mTLS
+  async createSecureHSMConnection() {
+    const certs = await this.getCertificates();
+    
+    return new HSMClient({
+      host: process.env.HSM_HOST,
+      port: process.env.HSM_PORT,
+      
+      // mTLS configuration
+      tls: {
+        enabled: true,
+        clientCert: certs.backend.cert,
+        clientKey: certs.backend.key,
+        serverCA: certs.hsm.ca,
+        verifyServer: true,
+        minimumTLSVersion: '1.3'
+      },
+      
+      // Connection pooling for performance
+      pool: {
+        min: 2,
+        max: 10,
+        acquireTimeoutMillis: 30000,
+        idleTimeoutMillis: 300000
+      },
+      
+      // Security timeouts
+      timeouts: {
+        connect: 10000,
+        request: 30000,
+        keyRelease: 60000  // TOTP authorization timeout
+      }
+    });
+  }
+}
+```
+
+## 🤖 Soroban Smart Contract
+
+### Contract Interaction
+```typescript
+// Initialize contract client
+const contractAddress = process.env.CUSTODY_CONTRACT_ADDRESS;
+const contract = new StellarSdk.Contract(contractAddress);
+
+// Call contract method
+async approveTransactionOnChain(guardianSecret: string, txId: number) {
+  const guardian = StellarSdk.Keypair.fromSecret(guardianSecret);
+  
+  const tx = new StellarSdk.TransactionBuilder(
+    await server.getAccount(guardian.publicKey()),
+    {
+      fee: await server.fetchBaseFee(),
+      networkPassphrase: StellarSdk.Networks.TESTNET
+    }
+  )
+  .addOperation(
+    contract.call(
+      'approve_transaction',
+      StellarSdk.nativeToScVal(guardian.publicKey()),
+      StellarSdk.nativeToScVal(txId)
+    )
+  )
+  .setTimeout(30)
+  .build();
+  
+  tx.sign(guardian);
+  
+  const prepared = await server.prepareTransaction(tx);
+  const result = await server.sendTransaction(prepared);
+  
+  return result;
+}
+```
+
+## 🔄 WebSocket Real-time Updates
+
+### Socket.io Setup
+```typescript
+// Backend
+import { Server } from 'socket.io';
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.FRONTEND_URL,
+    credentials: true
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.on('subscribe:guardian', (guardianId) => {
+    socket.join(`guardian:${guardianId}`);
+  });
+  
+  socket.on('subscribe:transaction', (txId) => {
+    socket.join(`transaction:${txId}`);
+  });
+});
+
+// Emit updates
+function emitTransactionUpdate(txId: string, update: any) {
+  io.to(`transaction:${txId}`).emit('transaction:update', update);
+}
+```
+
+### Frontend Connection
+```typescript
+// Frontend
+import { io } from 'socket.io-client';
+
+const socket = io(process.env.NEXT_PUBLIC_WS_URL, {
+  withCredentials: true
+});
+
+socket.on('connect', () => {
+  socket.emit('subscribe:guardian', guardianId);
+});
+
+socket.on('transaction:update', (update) => {
+  // Update UI with new transaction status
+  queryClient.invalidateQueries(['transaction', update.id]);
+});
+```
+
+## 📊 Rate Limiting
+
+### API Rate Limits
+```typescript
+// WhatsApp: 1000 messages/day per number
+// Stellar Horizon: 3600 requests/hour
+// HSM: No specific limit, but use connection pooling
+
+import rateLimit from 'express-rate-limit';
+
+const whatsappLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 1000,
+  keyGenerator: (req) => req.body.phone
+});
+
+const stellarLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3600
+});
+```
+
+## 🚨 Error Handling
+
+### Standardized Error Responses
+```typescript
+class ApiError extends Error {
+  constructor(
+    public statusCode: number,
+    public message: string,
+    public service: string
+  ) {
+    super(message);
+  }
+}
+
+// WhatsApp errors
+try {
+  await sendWhatsApp(data);
+} catch (error) {
+  if (error.response?.status === 429) {
+    throw new ApiError(429, 'WhatsApp rate limit exceeded', 'whatsapp');
+  }
+  throw new ApiError(500, 'WhatsApp service error', 'whatsapp');
+}
+
+// Stellar errors
+try {
+  await submitTransaction(tx);
+} catch (error) {
+  if (error.response?.status === 400) {
+    throw new ApiError(400, 'Invalid transaction', 'stellar');
+  }
+  throw new ApiError(500, 'Stellar network error', 'stellar');
+}
+```
+
+## 📝 API Documentation
+
+All APIs should be documented with Swagger/OpenAPI:
+
+```typescript
+@ApiTags('Transactions')
+@Controller('transactions')
+export class TransactionController {
+  @Post('create')
+  @ApiOperation({ summary: 'Create new transaction' })
+  @ApiResponse({ status: 201, description: 'Transaction created' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  async createTransaction(@Body() dto: CreateTransactionDto) {
+    // Implementation
+  }
+}
+```
+
+## Cross-References
+
+- Main spec: [stellar-custody-mvp.mdc](mdc:.cursor/rules/stellar-custody-mvp.mdc)
+- Database schema: [schema.mdc](mdc:.cursor/rules/schema.mdc)
+- Setup guide: [setup.mdc](mdc:.cursor/rules/setup.mdc)
+- Index: [index.mdc](mdc:.cursor/rules/index.mdc)
+
+---
+
+**Always handle API errors gracefully and respect rate limits!**

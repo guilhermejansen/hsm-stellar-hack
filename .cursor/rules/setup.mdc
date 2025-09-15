@@ -1,0 +1,126 @@
+---
+description: Quick start guide and setup instructions for Stellar Custody MVP
+---
+
+# 🚀 Stellar Custody MVP - Quick Start Guide
+
+## Project Overview
+
+This is a **Multi-Signature Custody System** for Stellar blockchain with hardware security module (HSM) integration and WhatsApp notifications.
+
+### Core Features
+- ✅ **2-of-3 Multi-Sig**: Requires 2 guardians to approve high-value transactions
+- ✅ **HSM Security**: All keys protected by DINAMO HSM
+- ✅ **WhatsApp Alerts**: Real-time notifications via ZuckZapGo
+- ✅ **TOTP Auth**: Individual authenticator codes for each guardian
+- ✅ **Hot/Cold Split**: 95% cold storage, 5% hot wallet
+
+## 🏁 Quick Start
+
+### 1. Clone and Setup
+```bash
+# Clone the repository
+git clone [repository-url]
+cd stellar-custody-mvp
+
+# Install dependencies
+npm install
+
+# Start Docker services
+docker-compose up -d
+```
+
+### 2. Environment Setup
+```bash
+# Copy environment files
+cp apps/backend/.env.example apps/backend/.env
+cp apps/frontend/.env.example apps/frontend/.env.local
+
+# Update with your credentials:
+# - HSM connection details
+# - WhatsApp API token
+# - Database credentials
+```
+
+### 3. Database Setup
+```bash
+# Run migrations
+npm run db:migrate
+
+# Open Prisma Studio (optional)
+npm run db:studio
+```
+
+### 4. Start Development
+```bash
+# Start both frontend and backend
+npm run dev
+
+# Backend: http://localhost:3001
+# Frontend: http://localhost:3000
+# API Docs: http://localhost:3001/api
+```
+
+## 📁 Project Structure
+
+```
+stellar-custody-mvp/
+├── apps/
+│   ├── backend/          # NestJS API
+│   └── frontend/         # Next.js 15
+├── packages/
+│   └── shared/           # Shared types
+├── contracts/
+│   └── custody/          # Soroban smart contract
+├── scripts/              # Utility scripts
+└── .cursor/
+    └── rules/            # AI development rules
+```
+
+## 🔧 Key Technologies
+
+- **Backend**: NestJS, Prisma, Stellar SDK
+- **Frontend**: Next.js 15, TailwindCSS, shadcn/ui
+- **Blockchain**: Stellar, Soroban smart contracts
+- **Security**: HSM DINAMO, TOTP, JWT
+- **Messaging**: WhatsApp (ZuckZapGo API)
+
+## 📋 Development Workflow
+
+### Creating a Guardian
+1. Admin registers guardian with name, email, phone
+2. System generates unique TOTP secret
+3. WhatsApp sent with QR code
+4. Guardian scans with Google Authenticator
+5. Guardian verifies first TOTP code
+
+### Processing Transactions
+1. User creates transaction
+2. If > 1000 XLM → requires approval
+3. WhatsApp sent to all guardians
+4. 2 guardians must approve with TOTP
+5. Transaction executes on Stellar
+
+## 🚨 Important Notes
+
+- **HSM Setup**: See `docs/HSM_SETUP.md` for configuration
+- **Testnet Only**: Use Stellar testnet for development
+- **Security First**: All private keys must stay in HSM
+- **Cursor AI**: Rules in `.cursor/rules/` guide development
+
+## 📚 Documentation
+
+- [HSM Setup Guide](docs/HSM_SETUP.md)
+- [API Documentation](http://localhost:3001/api)
+- [Cursor AI Rules](.cursor/rules/README.md)
+
+## 🤝 Support
+
+For questions about:
+- **HSM Integration**: Check HSM_SETUP.md
+- **Stellar/Soroban**: Visit https://developers.stellar.org
+- **WhatsApp API**: See https://api.zuckzapgo.com
+
+---
+
+**Ready to build?** The AI agent has complete context in `.cursor/rules/stellar-custody-mvp.mdc` to guide development!

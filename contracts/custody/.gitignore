@@ -1,0 +1,66 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Contract deployment artifacts
+contract-address-*.txt
+contract-config-*.json
+mainnet-deployment-*.json
+testnet-deployment-*.json
+
+# Stellar CLI generated files
+.soroban/
+
+# Backup files
+backups/
+*.backup
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Lock files (keep Cargo.lock for applications)
+# Cargo.lock
+
+# Documentation build
+/docs/book/
+
+# Coverage reports
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Benchmarking
+criterion/
+
+# Local development keys (testnet only!)
+keys/
+*.secret
+*.key
+
+# HSM configuration (production)
+hsm-config.json
+guardian-keys.json
+
+# Monitoring and alerting config
+monitoring-config.json
+alerts-config.json

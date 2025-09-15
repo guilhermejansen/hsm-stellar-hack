@@ -1,0 +1,204 @@
+---
+alwaysApply: true
+description: Master index for all Stellar Custody MVP development rules and guidelines
+---
+
+# 📑 STELLAR CUSTODY MVP - MASTER INDEX
+
+## 🎯 Project Overview
+
+This is the **master index** for all development rules of the Stellar Custody Multi-Sig MVP system. This index ensures all rules are interconnected and the AI agent has complete context.
+
+## 📚 Rule Files Reference
+
+### 1. [stellar-custody-mvp.mdc](mdc:.cursor/rules/stellar-custody-mvp.mdc)
+- **Purpose**: Complete technical specification and development guide
+- **Status**: Always Applied (alwaysApply: true)
+- **Contains**:
+  - Full system architecture
+  - Technology stack details
+  - Security requirements
+  - Implementation workflows
+  - Database schema
+  - API endpoints
+  - Smart contract specs
+
+### 2. [setup.mdc](mdc:.cursor/rules/setup.mdc)
+- **Purpose**: Quick start guide and initial setup instructions
+- **Status**: Reference guide
+- **Contains**:
+  - Environment setup steps
+  - Docker configuration
+  - Development commands
+  - Project structure overview
+
+### 3. [schema.mdc](mdc:.cursor/rules/schema.mdc)
+- **Purpose**: Complete database schema and data models
+- **Status**: Applied to Prisma and model files
+- **Contains**:
+  - Full Prisma schema
+  - Model relationships
+  - Indexes and constraints
+  - Usage examples
+
+### 4. [api-integrations.mdc](mdc:.cursor/rules/api-integrations.mdc)
+- **Purpose**: External API integration guidelines
+- **Status**: Applied to API-related files
+- **Contains**:
+  - WhatsApp (ZuckZapGo) integration
+  - Stellar blockchain operations
+  - HSM DINAMO connection
+  - WebSocket real-time updates
+
+### 5. [security-practices.mdc](mdc:.cursor/rules/security-practices.mdc)
+- **Purpose**: Security best practices and implementation
+- **Status**: Applied to auth and security files
+- **Contains**:
+  - Key management rules
+  - Authentication/Authorization
+  - Encryption standards
+  - Audit logging
+  - Emergency procedures
+
+### 6. [index.mdc](mdc:.cursor/rules/index.mdc) (This File)
+- **Purpose**: Master index connecting all rules
+- **Status**: Always Applied (alwaysApply: true)
+- **Contains**:
+  - Rule file references
+  - Project overview
+  - Cross-references
+
+### 7. [FINAL_ARCHITECTURE_SUMMARY.mdc](mdc:.cursor/rules/FINAL_ARCHITECTURE_SUMMARY.mdc)
+- **Purpose**: Complete final architecture with all security layers
+- **Status**: Reference guide (always consult for development)
+- **Contains**:
+  - 3 Guardian system (CEO, CFO, CTO)
+  - OCRA-like challenge-response authentication
+  - mTLS implementation guide
+  - Flexible threshold schemes (2-of-3, 3-of-3)
+  - Complete development roadmap
+
+### 8. [transaction-privacy.mdc](mdc:.cursor/rules/transaction-privacy.mdc)
+- **Purpose**: Ephemeral transaction keys for privacy protection
+- **Status**: Critical implementation requirement
+- **Contains**:
+  - Complete BIP32 hierarchy (Master → Cold → Hot → Transaction)
+  - Ephemeral key lifecycle management
+  - Transaction privacy protection
+  - Corporate interface requirements
+  - HSM key auto-destruction
+
+## 🔗 Cross-References
+
+### Security & HSM
+- Main spec: [Security Architecture](mdc:.cursor/rules/stellar-custody-mvp.mdc#-security-architecture)
+- Security guide: [Security Best Practices](mdc:.cursor/rules/security-practices.mdc)
+- HSM Setup: [HSM_SETUP.md](mdc:docs/HSM_SETUP.md)
+- Key management: [Key Management](mdc:.cursor/rules/security-practices.mdc#-key-management)
+
+### Guardian System
+- Registration flow: [Guardian Registration](mdc:.cursor/rules/stellar-custody-mvp.mdc#1-guardian-registration)
+- Quick guide: [Creating a Guardian](mdc:.cursor/rules/setup.mdc#creating-a-guardian)
+- Database model: [Guardian Model](mdc:.cursor/rules/schema.mdc#model-guardian)
+- TOTP security: [TOTP Implementation](mdc:.cursor/rules/security-practices.mdc#totp-implementation)
+
+### Transaction Processing
+- Multi-sig flow: [Transaction Approval](mdc:.cursor/rules/stellar-custody-mvp.mdc#2-transaction-approval)
+- Quick guide: [Processing Transactions](mdc:.cursor/rules/setup.mdc#processing-transactions)
+- WhatsApp API: [WhatsApp Integration](mdc:.cursor/rules/api-integrations.mdc#-whatsapp-integration-zuckzapgo)
+- Transaction model: [Transaction Model](mdc:.cursor/rules/schema.mdc#model-transaction)
+
+### Development Environment
+- Setup instructions: [Quick Start](mdc:.cursor/rules/setup.mdc#-quick-start)
+- Commands: [Development Commands](mdc:.cursor/rules/stellar-custody-mvp.mdc#-development-commands)
+- Docker config: [Environment Setup](mdc:.cursor/rules/setup.mdc#2-environment-setup)
+
+### External APIs
+- WhatsApp guide: [WhatsApp Messages](mdc:.cursor/rules/api-integrations.mdc#message-types-implementation)
+- Stellar operations: [Stellar Integration](mdc:.cursor/rules/api-integrations.mdc#-stellar-integration)
+- HSM operations: [HSM Integration](mdc:.cursor/rules/api-integrations.mdc#-hsm-dinamo-integration)
+
+## 🎯 AI Agent Instructions
+
+When developing this project, the AI agent should:
+
+1. **Always consult** [stellar-custody-mvp.mdc](mdc:.cursor/rules/stellar-custody-mvp.mdc) for technical specifications
+2. **Reference** [setup.mdc](mdc:.cursor/rules/setup.mdc) for environment setup
+3. **Follow** [security-practices.mdc](mdc:.cursor/rules/security-practices.mdc) for all security decisions
+4. **Use** [schema.mdc](mdc:.cursor/rules/schema.mdc) for database operations
+5. **Check** [api-integrations.mdc](mdc:.cursor/rules/api-integrations.mdc) for external service connections
+6. **Implement** features in the order specified in the checklist
+7. **Prioritize** security over convenience in ALL decisions
+
+### Rule Application Order
+1. Read this index first
+2. Check main specification
+3. Apply security practices
+4. Follow API guidelines
+5. Use correct schema
+
+## 📋 Implementation Priority
+
+1. **Phase 1**: Core infrastructure (Docker, Prisma, HSM connection)
+2. **Phase 2**: Guardian system with TOTP
+3. **Phase 3**: Transaction flow with multi-sig
+4. **Phase 4**: WhatsApp integration
+5. **Phase 5**: Soroban smart contract
+6. **Phase 6**: Frontend dashboard
+7. **Phase 7**: Testing and deployment
+
+## 🚨 Critical Requirements
+
+These must be followed in ALL implementations:
+- ✅ Private keys NEVER leave HSM
+- ✅ TOTP required for all approvals
+- ✅ 2-of-3 guardians for transactions > 1000 XLM
+- ✅ WhatsApp notifications for transparency
+- ✅ Complete audit trail
+- ✅ Daily automated backups
+- ✅ Emergency recovery procedures
+
+## 📝 Notes para uso
+
+- Use `context7:resolve-library-id` + `context7:get-library-docs` para:
+  * Stellar SDK: '/stellar/js-stellar-sdk'
+  * NestJS: '/nestjs/nest'
+  * Prisma: '/prisma/prisma'
+  * Next.js: '/vercel/next.js'
+
+COMPONENTES UI:
+- Use `shadcn-ui:get_component` para componentes prontos
+- Use `shadcn-ui:get_block` para blocos de interface
+
+MEMÓRIA PERSISTENTE:
+- Use `memory-semantic:aim_create_entities` para salvar progresso
+- Use `memory-semantic:aim_search_nodes` para recuperar contexto
+
+RACIOCÍNIO SEQUENCIAL:
+- Use `sequential-thinking:sequentialthinking` para resolver problemas complexos
+
+PESQUISA ATUALIZADA:
+- Use `web_search` para documentação mais recente
+- Busque por "Stellar testnet 2024", "HSM DINAMO SDK", "Soroban examples"
+
+Stellar:
+  - SDK: https://developers.stellar.org/docs/tools/sdks
+  - Horizon API: https://developers.stellar.org/docs/data/horizon
+  - Soroban: https://soroban.stellar.org/docs
+  - Testnet: https://horizon-testnet.stellar.org
+  - Friendbot: https://friendbot.stellar.org
+  - Laboratory: https://laboratory.stellar.org
+
+HSM DINAMO:
+  - Docs: https://docs.dinamonetworks.io/
+  - API JS: https://en.docs.dinamonetworks.io/
+  - GitHub: https://github.com/dinamonetworks
+    
+- All rules in this directory work together
+- The main specification is in [stellar-custody-mvp.mdc](mdc:.cursor/rules/stellar-custody-mvp.mdc)
+- For quick setup, see [setup.mdc](mdc:.cursor/rules/setup.mdc)
+- This index ensures no critical information is missed
+
+---
+
+**The AI agent has complete context through these interconnected rules to build the Stellar Custody MVP successfully!**

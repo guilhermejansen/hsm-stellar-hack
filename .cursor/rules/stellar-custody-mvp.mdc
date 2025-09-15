@@ -1,0 +1,301 @@
+---
+alwaysApply: true
+description: Complete development guide for Stellar Custody Multi-Sig MVP with HSM integration
+---
+
+# 🚀 STELLAR CUSTODY MULTI-SIG MVP - COMPLETE DEVELOPMENT GUIDE
+
+## 🎯 PROJECT OVERVIEW
+
+You are developing a **Multi-Signature Custody System** for Stellar blockchain with the following core features:
+- **2-of-3 Multi-Sig System**: Requires 2 guardians out of 3 to approve high-value transactions
+- **HSM DINAMO Integration**: Hardware Security Module for key management
+- **WhatsApp Notifications**: Real-time approval requests via ZuckZapGo API
+- **TOTP Authentication**: Each guardian has individual Time-based One-Time Password
+- **Hot/Cold Wallet Split**: 95% cold storage, 5% hot wallet for operations
+
+## 📦 MONOREPO ARCHITECTURE
+
+```
+stellar-custody-mvp/
+├── apps/
+│   ├── backend/         # NestJS API
+│   │   ├── src/
+│   │   │   ├── guardians/    # Guardian management
+│   │   │   ├── stellar/      # Stellar blockchain integration
+│   │   │   ├── hsm/          # HSM DINAMO integration
+│   │   │   ├── whatsapp/     # WhatsApp notifications
+│   │   │   ├── auth/         # TOTP/Authentication
+│   │   │   ├── transactions/ # Transaction logic
+│   │   │   ├── soroban/      # Smart contract integration
+│   │   │   ├── recovery/     # Emergency recovery
+│   │   │   └── monitoring/   # System monitoring
+│   │   └── prisma/
+│   │       └── schema.prisma # Complete database schema
+│   │
+│   └── frontend/        # Next.js 15 App Router
+│       ├── app/
+│       │   ├── (auth)/       # Login/Register
+│       │   ├── dashboard/    # Main dashboard
+│       │   ├── guardians/    # Guardian management
+│       │   └── approve/      # Transaction approvals
+│       └── components/
+│           ├── wallet/       # Wallet components
+│           ├── guardians/    # Guardian components
+│           └── transactions/ # Transaction components
+│
+├── packages/
+│   └── shared/          # Shared types and utilities
+│
+├── contracts/
+│   └── custody/         # Soroban smart contract (Rust)
+│
+└── scripts/             # Setup and utility scripts
+```
+
+## 🛠️ TECHNOLOGY STACK
+
+### Backend
+- **Framework**: NestJS with TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Blockchain**: Stellar SDK + Soroban smart contracts
+- **HSM**: DINAMO SDK for secure key management
+- **Authentication**: JWT + TOTP (otplib)
+- **WhatsApp**: ZuckZapGo API integration
+- **Queue**: Redis for job processing
+- **WebSocket**: Socket.io for real-time updates
+
+### Frontend
+- **Framework**: Next.js 15 with App Router
+- **UI**: Tailwind CSS + shadcn/ui components
+- **State**: TanStack Query + Zustand
+- **Animations**: Framer Motion
+- **Forms**: React Hook Form + Zod
+- **Charts**: Recharts
+
+### Infrastructure
+- **Container**: Docker Compose
+- **CI/CD**: GitHub Actions
+- **Monitoring**: Custom monitoring service
+- **Backup**: Automated daily backups
+
+## 🔐 SECURITY ARCHITECTURE
+
+### Multi-Signature Flow
+1. **Transaction Creation**: User creates transaction
+2. **Threshold Check**: System checks if amount > 1000 XLM or from cold wallet
+3. **Guardian Notification**: WhatsApp sent to all 3 guardians with approval button
+4. **TOTP Validation**: Each guardian enters their 6-digit TOTP code
+5. **Approval Collection**: After 2 valid approvals, transaction executes
+6. **Confirmation**: All guardians receive WhatsApp confirmation
+
+### Key Management (HSM DINAMO Architecture)
+- **Master Key**: Root key stored in HSM partition per organization
+- **Cold Wallet**: Master wallet at derivation path `m/0'` (95% of funds)
+- **Hot Wallet**: Derived from Cold wallet at path `m/0'/0'` (5% of funds)  
+- **Guardian Keys**: Each guardian has individual partition with BIP32 Edwards XPRIV
+- **TOTP Authorization**: Guardians use TOTP to authorize HSM key release for signing
+- **No Key Export**: Private keys never leave HSM hardware boundaries
+
+### Authentication Layers
+1. **User Login**: Email + Password + TOTP
+2. **Guardian Actions**: Additional TOTP verification
+3. **Transaction Approval**: Separate TOTP per approval
+4. **Emergency Override**: Admin recovery codes
+
+## 📋 DATABASE SCHEMA HIGHLIGHTS
+
+Key models from [schema.prisma](mdc:apps/backend/prisma/schema.prisma):
+- **User**: Basic user information with Stellar keys
+- **Guardian**: Extended user with TOTP, role, and limits
+- **Wallet**: Hot/Cold wallets with HSM key references
+- **Transaction**: All payment records with approval tracking
+- **Approval**: Individual guardian approvals with TOTP validation
+- **Notification**: WhatsApp message tracking
+
+## 🔄 CORE WORKFLOWS
+
+### 1. Guardian Registration (HSM DINAMO KYC Workflow)
+```typescript
+// Flow: KYC Process → HSM Partition → TOTP Setup → Activation
+1. POST /api/guardians/register (with PII data)
+2. HSM creates individual partition for guardian
+3. HSM generates AES256 key for PII encryption  
+4. HSM creates BIP32 Edwards XPRIV for guardian
+5. Generate TOTP secret linked to HSM partition
+6. Encrypt PII with AES key using Svault Module
+7. Send WhatsApp with TOTP QR code
+8. Guardian scans QR and activates HSM partition with first TOTP
+```
+
+### 2. Transaction Approval (Complete HSM DINAMO Multi-Sig with Ephemeral Keys)  
+```typescript
+// Flow: RAW TX → Ephemeral Key → Challenge → OCRA Response → HSM Sign → Destroy Key → Blockchain
+1. POST /api/transactions/create (prepare RAW transaction)
+2. HSM generates ephemeral transaction key (m/0'/0'/N') - NEW ADDRESS per transaction
+3. Generate transaction-specific challenge (OCRA-like) 
+4. Send WhatsApp to guardians with challenge + approval request
+5. Guardian uses Authenticator App with challenge to generate response
+6. POST /api/transactions/approve with challenge-response code
+7. HSM validates challenge-response and releases ephemeral signing key
+8. HSM signs transaction with ephemeral key (ONE-TIME USE)
+9. HSM destroys/expires ephemeral key (PRIVACY PROTECTION)
+10. Collect required signatures (2-of-3 or 3-of-3 based on amount)
+11. Broadcast signed transaction to Stellar blockchain (from new address)
+12. Send confirmation WhatsApp to all guardians
+```
+
+### 3. Emergency Recovery
+```typescript
+// Flow: 2 guardians lost → Admin override → Create temp guardians
+1. POST /api/recovery/emergency
+2. Validate admin override code
+3. Generate temporary guardians
+4. Reconfigure HSM multi-sig
+5. Notify all stakeholders
+```
+
+## 📱 WHATSAPP INTEGRATION
+
+Using ZuckZapGo API with token: `!!qYWdJ61zk3i1AvTfXhzE!!`
+
+Key message types:
+- **Text**: Simple notifications
+- **Buttons**: Approval links
+- **Stickers**: Success confirmations
+- **Images**: QR codes for TOTP setup
+
+## 🚀 SMART CONTRACT (SOROBAN)
+
+Located in `contracts/custody/` - **ALREADY DEPLOYED AND WORKING**:
+- **Multi-sig logic**: On-chain 2-of-3 and 3-of-3 approval ✅
+- **Address flexibility**: Works with ANY Stellar address (static or ephemeral) ✅
+- **Signature validation**: Validates Ed25519 signatures regardless of key source ✅
+- **Threshold schemes**: Supports flexible M-of-N configurations ✅
+- **Guardian management**: Add/remove guardians ✅
+- **Daily/Monthly limits**: Enforced by contract ✅
+- **Emergency procedures**: Shutdown and recovery ✅
+
+**Contract Address**: `CCVEIQKVF6C3G52OJ7TLVIPMJXDZ3ABPLLXQAQVDX2BEZHWUPLFWUYSX`
+
+**⚠️ IMPORTANT**: The smart contract is **PERFECT for ephemeral keys** because:
+- It validates signatures, not how keys were generated
+- It accepts any valid Stellar address 
+- It works with static OR ephemeral transaction addresses
+- No contract changes needed for Transaction Key implementation
+
+## 🔧 DEVELOPMENT COMMANDS
+
+```bash
+# Initial setup
+npm install
+docker-compose up -d
+npm run db:migrate
+
+# Development
+npm run dev              # Start both frontend and backend
+npm run db:studio        # Open Prisma Studio
+
+# Testing
+npm test                 # Unit tests
+npm run test:e2e         # E2E tests
+
+# Production
+npm run build
+docker-compose -f docker-compose.prod.yml up
+```
+
+## ✅ IMPLEMENTATION CHECKLIST
+
+### Phase 1: Core Setup
+- [ ] Initialize monorepo structure
+- [ ] Setup Docker environment
+- [ ] Configure Prisma with complete schema
+- [ ] Implement HSM connection service
+- [ ] Create Stellar service with testnet
+
+### Phase 2: Guardian System
+- [ ] Guardian registration flow
+- [ ] TOTP generation and QR codes
+- [ ] WhatsApp notification service
+- [ ] Guardian dashboard UI
+
+### Phase 3: Transaction Flow
+- [ ] Transaction creation API
+- [ ] Multi-sig approval logic
+- [ ] TOTP validation per approval
+- [ ] Stellar transaction execution
+- [ ] Real-time status updates
+
+### Phase 4: Smart Contract
+- [ ] Write Soroban contract in Rust
+- [ ] Deploy to testnet
+- [ ] Integrate with backend
+- [ ] Test multi-sig on-chain
+
+### Phase 5: Security & Recovery
+- [ ] Emergency recovery system
+- [ ] Automated daily backups
+- [ ] Monitoring and alerts
+- [ ] Rate limiting
+
+### Phase 6: UI/UX
+- [ ] Complete dashboard
+- [ ] Mobile-responsive design
+- [ ] Real-time WebSocket updates
+- [ ] Success animations
+
+### Phase 7: Testing & Deploy
+- [ ] Unit test coverage > 80%
+- [ ] E2E test critical paths
+- [ ] Security audit
+- [ ] Production deployment
+
+## 🔗 KEY REFERENCES
+
+- **HSM Setup**: [HSM_SETUP.md](mdc:docs/HSM_SETUP.md)
+- **Stellar Docs**: https://developers.stellar.org
+- **Soroban Docs**: https://soroban.stellar.org
+- **WhatsApp API**: https://api.zuckzapgo.com
+
+## 🚨 CRITICAL REQUIREMENTS
+
+1. **NEVER** store private keys outside HSM
+2. **ALWAYS** validate TOTP before approvals
+3. **REQUIRE** 2 of 3 guardians for high-value transactions
+4. **NOTIFY** all guardians via WhatsApp for transparency
+5. **LOG** every action for audit trail
+6. **BACKUP** system state daily
+7. **TEST** emergency recovery procedures
+
+## 🎯 SUCCESS CRITERIA (UPDATED)
+
+The system is complete when:
+- ✅ **3 guardians** can be registered with individual TOTP + OCRA-like challenges
+- ✅ **Complete BIP32 hierarchy**: Master (m) → Cold (m/0') → Hot (m/0'/0') → Transaction (m/0'/0'/N')
+- ✅ **Ephemeral transaction keys** generate NEW ADDRESS per transaction (privacy)
+- ✅ **Key lifecycle management**: Transaction keys auto-expire and destroy in HSM
+- ✅ **Flexible thresholds**: 2-of-3 for < 10K XLM, 3-of-3 for Cold Wallet access
+- ✅ **OCRA-like challenges** work for transaction-specific authentication
+- ✅ **WhatsApp notifications** include challenge codes and approval links
+- ✅ **HSM DINAMO** protects all private keys with partition isolation
+- ✅ **Transaction privacy**: Impossible to correlate transactions to source wallet
+- ✅ **mTLS** secures all communications (production-ready)
+- ✅ **Smart contract** enforces on-chain rules (works with ephemeral addresses ✅)
+- ✅ **Emergency recovery** tested with 3-guardian scenarios
+- ✅ **Corporate interface** with professional enterprise-grade UI/UX
+- ✅ System handles 100+ transactions/day with ephemeral keys
+- ✅ **Privacy compliance**: Each transaction uses unique address (non-correlatable)
+
+## 📝 DEVELOPMENT NOTES
+
+When implementing:
+1. Start with the backend structure
+2. Implement HSM integration early
+3. Test WhatsApp API separately
+4. Use testnet for all Stellar operations
+5. Implement monitoring from day 1
+6. Document all API endpoints
+7. Create comprehensive tests
+
+Remember: This is a HIGH-SECURITY financial system. Every decision should prioritize security over convenience.

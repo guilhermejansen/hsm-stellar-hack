@@ -1,0 +1,144 @@
+# ==================== STELLAR CUSTODY MVP - DOCKER COMPOSE ====================
+# 🐳 Simple Docker setup for complete application stack
+
+services:
+  # ==================== DATABASE ====================
+  postgres:
+    image: postgres:15-alpine
+    container_name: stellar-custody-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stellar_custody
+      POSTGRES_PASSWORD: secure_password_2024
+      POSTGRES_DB: stellar_custody_db
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - stellar-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stellar_custody -d stellar_custody_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== REDIS ====================
+  redis:
+    image: redis:7-alpine
+    container_name: stellar-custody-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes --requirepass redis_secure_2024
+    volumes:
+      - redis_data:/data
+    networks:
+      - stellar-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ==================== BACKEND ====================
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: stellar-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      # Application
+      NODE_ENV: development
+      API_PORT: 3001
+      API_HOST: 0.0.0.0
+      
+      # Database (Docker internal port 5432)
+      DATABASE_URL: "postgresql://stellar_custody:secure_password_2024@postgres:5432/stellar_custody_db"
+      
+      # Redis (Docker internal port 6379)
+      REDIS_URL: "redis://:redis_secure_2024@redis:6379"
+      
+      # HSM DINAMO (Production values)
+      HSM_HOST: 187.33.9.132
+      HSM_PORT: 4433
+      HSM_USER: demoale
+      HSM_PASS: 12345678
+      HSM_PARTITION: DEMO
+      
+      # Stellar Network (Testnet)
+      STELLAR_NETWORK: testnet
+      STELLAR_RPC_URL: https://soroban-testnet.stellar.org:443
+      STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      
+      # Smart Contract (Already deployed)
+      STELLAR_CONTRACT_ID: CCVEIQKVF6C3G52OJ7TLVIPMJXDZ3ABPLLXQAQVDX2BEZHWUPLFWUYSX
+      STELLAR_CONTRACT_ADDRESS: CCVEIQKVF6C3G52OJ7TLVIPMJXDZ3ABPLLXQAQVDX2BEZHWUPLFWUYSX
+      
+      # WhatsApp API (ZuckZapGo)
+      WHATSAPP_API_URL: https://api.zuckzapgo.com
+      WHATSAPP_TOKEN: "!!qYWdJ61zk3i1AvTfXhzE!!"
+      
+      # Authentication
+      JWT_SECRET: stellar_custody_jwt_super_secret_key_2024_abcdef123456
+      JWT_EXPIRES_IN: 24h
+      ENCRYPTION_KEY: stellar_custody_encryption_key_2024_32bytes_exactly_abcdef123456
+      
+      # TOTP Configuration
+      TOTP_ISSUER: "Stellar Custody MVP"
+      TOTP_PERIOD: 30
+      TOTP_DIGITS: 6
+      
+      # System Limits
+      DAILY_LIMIT: 100000
+      MONTHLY_LIMIT: 1000000
+      HIGH_VALUE_THRESHOLD: 1000
+      
+      # Guardian Configuration (3 Guardians)
+      REQUIRED_APPROVALS_LOW: 2
+      REQUIRED_APPROVALS_HIGH: 2
+      REQUIRED_APPROVALS_CRITICAL: 3
+      GUARDIAN_COUNT: 3
+      
+      # Wallet Distribution
+      COLD_WALLET_PERCENTAGE: 95
+      HOT_WALLET_PERCENTAGE: 5
+      
+      # Security
+      CORS_ORIGIN: "http://localhost:3000,http://localhost:3001"
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stellar-network
+    volumes:
+      - ./apps/backend/logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ==================== VOLUMES ====================
+volumes:
+  postgres_data:
+    name: stellar_postgres_data
+  redis_data:
+    name: stellar_redis_data
+
+# ==================== NETWORKS ====================
+networks:
+  stellar-network:
+    name: stellar-custody-network
+    driver: bridge

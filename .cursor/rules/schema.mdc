@@ -1,0 +1,612 @@
+---
+description: Complete database schema and data models for Stellar Custody MVP
+globs: "*.prisma,**/prisma/**,**/models/**,**/entities/**"
+---
+
+# 📊 DATABASE SCHEMA - STELLAR CUSTODY MVP
+
+## Overview
+
+This rule provides the complete database schema for the Stellar Custody system. Reference this when working with data models, Prisma, or any database-related code.
+
+## Complete Prisma Schema
+
+```prisma
+// apps/backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USERS AND GUARDIANS ====================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String
+  phone             String    @unique // For WhatsApp
+  phoneCountryCode  String    @default("+55")
+  passwordHash      String
+  
+  // KYC Information (Encrypted with HSM AES256)
+  encryptedPII      String?   @db.Text // PII encrypted by HSM Svault Module
+  kycStatus         KYCStatus @default(PENDING)
+  kycDocuments      String[]  // Document hashes
+  
+  // HSM DINAMO Integration
+  hsmPartitionId    String?   @unique // Individual HSM partition
+  hsmAESKeyId       String?   @unique // AES256 key for PII encryption
+  stellarPublicKey  String?   @unique
+  hsmKeyName        String?   @unique // BIP32 Edwards XPRIV reference
+  
+  // Authentication
+  totpSecret        String?   // Encrypted - linked to HSM partition
+  totpQrCode        String?   @db.Text
+  totpBackupCodes   String[]
+  isEmailVerified   Boolean   @default(false)
+  isPhoneVerified   Boolean   @default(false)
+  hsmActivated      Boolean   @default(false) // HSM partition activated with TOTP
+  
+  // Relations
+  guardian          Guardian?
+  wallets           Wallet[]
+  transactions      Transaction[]
+  notifications     Notification[]
+  certificates      Certificate[] // mTLS certificates for this user
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Guardian {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id])
+  
+  // Guardian Information
+  role              GuardianRole
+  level             Int       @default(1) // 1-3 permission levels
+  isActive          Boolean   @default(true)
+  
+  // Individual TOTP
+  totpSecret        String    // Encrypted
+  totpQrCode        String    @db.Text
+  totpVerified      Boolean   @default(false)
+  lastTotpUsed      String?   // Prevent replay
+  
+  // Limits
+  dailyLimit        Decimal   @default(10000) @db.Decimal(20, 7)
+  monthlyLimit      Decimal   @default(100000) @db.Decimal(20, 7)
+  
+  // Audit
+  approvals         Approval[]
+  lastApprovalAt    DateTime?
+  totalApprovals    Int       @default(0)
+  
+  // Threshold Signature Participation
+  thresholdShares   GuardianThresholdShare[]
+  
+  // OCRA-like Challenge Responses
+  challengeResponses ChallengeResponse[]
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([isActive])
+}
+
+// ==================== WALLETS AND TRANSACTIONS ====================
+
+model Wallet {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  
+  // Stellar  
+  publicKey         String    @unique
+  derivationPath    String    // HSM DINAMO BIP32 paths: m/0' (Cold), m/0'/0' (Hot)
+  walletType        WalletType
+  
+  // HSM DINAMO Hierarchy (Cold is master, Hot is derived)
+  parentWalletId    String?   // Hot wallet references Cold wallet as parent
+  parentWallet      Wallet?   @relation("WalletHierarchy", fields: [parentWalletId], references: [id])
+  childWallets      Wallet[]  @relation("WalletHierarchy")
+  
+  // Balances 
+  balance           Decimal   @default(0) @db.Decimal(20, 7)
+  reservedBalance   Decimal   @default(0) @db.Decimal(20, 7) // For pending transactions
+  maxBalance        Decimal?  @db.Decimal(20, 7) // Hot: 5%, Cold: 95%
+  
+  // HSM Protection
+  hsmKeyName        String    @unique // BIP32 Edwards XPRIV reference
+  hsmPartitionId    String    // HSM partition containing the key
+  isHSMProtected    Boolean   @default(true)
+  requiresTOTP      Boolean   @default(false) // Hot=false, Cold=true
+  
+  transactions      Transaction[]
+  
+  // Ephemeral Transaction Keys (m/0'/0'/N')
+  transactionKeys   TransactionKey[] @relation("TransactionKeys")
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([walletType])
+  @@index([publicKey])
+  @@index([parentWalletId])
+}
+
+// ==================== EPHEMERAL TRANSACTION KEYS ====================
+
+model TransactionKey {
+  id                String    @id @default(cuid())
+  
+  // Transaction Binding
+  transactionId     String    @unique
+  transaction       Transaction @relation(fields: [transactionId], references: [id])
+  
+  // Hierarchy (m/0'/0'/N' - Ephemeral from Hot Wallet)
+  parentWalletId    String    // Hot wallet (m/0'/0')
+  parentWallet      Wallet    @relation("TransactionKeys", fields: [parentWalletId], references: [id])
+  
+  // HSM Key Info (Ephemeral)
+  hsmKeyId          String    @unique // Temporary key in HSM
+  derivationPath    String    // m/0'/0'/N' (N = transaction index)
+  transactionIndex  Int       // Incremental index per wallet
+  publicKey         String    @unique // New address per transaction (privacy)
+  
+  // Lifecycle Management
+  isActive          Boolean   @default(true)
+  isUsed            Boolean   @default(false)
+  isExpired         Boolean   @default(false)
+  expiresAt         DateTime  // Keys expire after 1 hour
+  usedAt            DateTime? // When key was used for signing
+  destroyedAt       DateTime? // When key was destroyed in HSM
+  
+  // Security Audit
+  guardianId        String?   // Guardian who authorized key usage
+  totpCodeUsed      String?   // TOTP used to authorize (audit only)
+  signatureHash     String?   // Transaction signature generated
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([isActive, isUsed])
+  @@index([expiresAt])
+  @@index([transactionIndex])
+  @@index([parentWalletId])
+}
+
+model Transaction {
+  id                String    @id @default(cuid())
+  
+  // Stellar
+  stellarHash       String?   @unique
+  fromWalletId      String
+  fromWallet        Wallet    @relation(fields: [fromWalletId], references: [id])
+  toAddress         String
+  amount            Decimal   @db.Decimal(20, 7)
+  memo              String?
+  
+  // Status
+  status            TxStatus
+  txType            TxType
+  
+  // Multi-sig
+  requiresApproval  Boolean   @default(false)
+  requiredApprovals Int       @default(0)
+  approvals         Approval[]
+  
+  // Threshold Signature Scheme
+  thresholdSchemeId String?
+  thresholdScheme   ThresholdScheme? @relation(fields: [thresholdSchemeId], references: [id])
+  
+  // OCRA-like Challenge
+  challenge         TransactionChallenge?
+  
+  // Ephemeral Transaction Key (m/0'/0'/N')
+  transactionKey    TransactionKey?
+  
+  // Metadata
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  errorMessage      String?
+  
+  createdAt         DateTime  @default(now())
+  executedAt        DateTime?
+  
+  @@index([status])
+  @@index([stellarHash])
+}
+
+// ==================== APPROVAL SYSTEM ====================
+
+model Approval {
+  id                String    @id @default(cuid())
+  
+  transactionId     String
+  transaction       Transaction @relation(fields: [transactionId], references: [id])
+  
+  guardianId        String
+  guardian          Guardian  @relation(fields: [guardianId], references: [id])
+  
+  // HSM DINAMO Challenge-Response (OCRA-like) + TOTP for Key Release
+  totpCode          String?   // Not stored, just for audit
+  totpValidatedAt   DateTime? // When TOTP was validated
+  
+  // OCRA-like Challenge Response
+  challengeHash     String?   // Transaction-specific challenge hash
+  challengeResponse String?   // Guardian's response to challenge
+  authMethod        String?   // 'OCRA_LIKE' or 'TOTP_FALLBACK'
+  challengeExpiresAt DateTime? // When challenge expires
+  
+  // HSM Key Release
+  hsmKeyReleased    Boolean   @default(false) // HSM released key for signing
+  hsmKeyReleasedAt  DateTime? // When HSM released the key
+  hsmSignature      String?   // Signature generated by HSM key
+  hsmPartitionUsed  String?   // Which HSM partition was used
+  keyReleaseId      String?   // HSM key release authorization ID
+  
+  // Validation Status
+  isValid           Boolean   @default(false)
+  validatedAt       DateTime  @default(now())
+  
+  // Audit Metadata
+  ipAddress         String?
+  userAgent         String?
+  rawTransaction    String?   @db.Text // RAW transaction that was signed
+  
+  @@unique([transactionId, guardianId])
+  @@index([transactionId])
+  @@index([hsmKeyReleased])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id                String    @id @default(cuid())
+  
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  
+  type              NotificationType
+  channel           NotificationChannel
+  
+  // Content
+  title             String
+  body              String    @db.Text
+  imageUrl          String?
+  actionUrl         String?
+  
+  // WhatsApp specific
+  whatsappMessageId String?
+  whatsappStatus    String?
+  
+  // Status
+  sent              Boolean   @default(false)
+  sentAt            DateTime?
+  read              Boolean   @default(false)
+  readAt            DateTime?
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([userId, sent])
+}
+
+// ==================== ENUMS ====================
+
+enum KYCStatus {
+  PENDING      // Initial status
+  DOCUMENTS_SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REQUIRES_UPDATE
+}
+
+enum GuardianRole {
+  CEO
+  CFO
+  CTO
+  TREASURER
+  ADMIN
+}
+
+enum WalletType {
+  HOT
+  COLD
+}
+
+enum TxStatus {
+  PENDING
+  AWAITING_APPROVAL
+  APPROVED
+  EXECUTING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum TxType {
+  PAYMENT
+  REBALANCE
+  WITHDRAWAL
+  DEPOSIT
+}
+
+enum ThresholdSchemeType {
+  LOW_VALUE_2_OF_3     // < 1,000 XLM - 2 of 3 guardians, OCRA-like optional
+  HIGH_VALUE_2_OF_3    // 1,000 - 10,000 XLM - 2 of 3 guardians, OCRA-like required
+  CRITICAL_3_OF_3      // > 10,000 XLM or Cold Wallet - 3 of 3 guardians, OCRA-like required
+}
+
+// ==================== THRESHOLD SIGNATURES ====================
+
+model ThresholdScheme {
+  id                String    @id @default(cuid())
+  groupId           String    @unique // HSM threshold group ID
+  schemeType        ThresholdSchemeType
+  threshold         Int       // M (required signatures) - max 3
+  totalParties      Int       // N (total guardians) - always 3
+  
+  // OCRA-like Challenge Configuration
+  challengeType     String    @default("OCRA_LIKE") // OCRA_LIKE, OCRA_LIKE_REQUIRED, TOTP_FALLBACK
+  challengeTimeout  Int       @default(300) // 5 minutes
+  requiresContext   Boolean   @default(true) // Transaction context in challenge
+  
+  // HSM Configuration
+  hsmAlgorithm      String    @default("ED25519")
+  isActive          Boolean   @default(true)
+  
+  // Guardian Shares (Always 3 guardians: CEO, CFO, CTO)
+  guardianShares    Json      // Array of {guardianId, partitionId, shareIndex}
+  shares            GuardianThresholdShare[] // Structured guardian shares
+  
+  // Usage Tracking
+  transactions      Transaction[]
+  usageCount        Int       @default(0)
+  lastUsedAt        DateTime?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([schemeType])
+  @@index([threshold, totalParties])
+}
+
+// ==================== mTLS CERTIFICATES ====================
+
+model Certificate {
+  id                String    @id @default(cuid())
+  
+  // Certificate Info
+  commonName        String    // e.g., "guardian-ceo", "hsm-dinamo-server"
+  certificateType   CertificateType
+  serialNumber      String    @unique
+  
+  // Certificate Data
+  pemCertificate    String    @db.Text // Public certificate
+  pemPrivateKey     String?   @db.Text // Private key (encrypted)
+  caCertificate     String?   @db.Text // CA certificate chain
+  
+  // Validity
+  notBefore         DateTime
+  notAfter          DateTime
+  isRevoked         Boolean   @default(false)
+  revokedAt         DateTime?
+  revokeReason      String?
+  
+  // Relations
+  userId            String?   // For guardian certificates
+  user              User?     @relation(fields: [userId], references: [id])
+  
+  // Usage
+  lastUsedAt        DateTime?
+  usageCount        Int       @default(0)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([certificateType])
+  @@index([commonName])
+  @@index([notAfter]) // For expiration monitoring
+}
+
+// Guardian participation in threshold schemes
+model GuardianThresholdShare {
+  id                String    @id @default(cuid())
+  
+  guardianId        String
+  guardian          Guardian  @relation(fields: [guardianId], references: [id])
+  
+  thresholdSchemeId String
+  thresholdScheme   ThresholdScheme @relation(fields: [thresholdSchemeId], references: [id])
+  
+  // Share Information
+  shareIndex        Int       // Index of this guardian's share (0-based)
+  hsmPartitionId    String    // HSM partition storing the share
+  shareKeyId        String    // HSM key ID for this share
+  
+  // Status
+  isActive          Boolean   @default(true)
+  lastUsedAt        DateTime?
+  
+  createdAt         DateTime  @default(now())
+  
+  @@unique([guardianId, thresholdSchemeId])
+  @@index([thresholdSchemeId])
+  @@index([shareIndex])
+}
+
+// ==================== OCRA-LIKE CHALLENGES ====================
+
+model TransactionChallenge {
+  id                String    @id @default(cuid())
+  
+  transactionId     String    @unique
+  transaction       Transaction @relation(fields: [transactionId], references: [id])
+  
+  // Challenge Data
+  challengeHash     String    @unique // Short hash shown to guardian
+  fullChallenge     String    @db.Text // Complete challenge string
+  challengeData     Json      // Transaction context data
+  
+  // Challenge Status
+  isActive          Boolean   @default(true)
+  isUsed            Boolean   @default(false)
+  usedAt            DateTime?
+  expiresAt         DateTime  // 5 minutes from creation
+  
+  // Guardian Responses
+  responses         ChallengeResponse[]
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([challengeHash])
+  @@index([expiresAt])
+  @@index([isActive, isUsed])
+}
+
+model ChallengeResponse {
+  id                String    @id @default(cuid())
+  
+  challengeId       String
+  challenge         TransactionChallenge @relation(fields: [challengeId], references: [id])
+  
+  guardianId        String
+  guardian          Guardian  @relation(fields: [guardianId], references: [id])
+  
+  // Response Data
+  responseCode      String    // Guardian's OCRA-like response
+  responseMethod    String    // 'OCRA_LIKE' or 'TOTP_FALLBACK'
+  isValid           Boolean   @default(false)
+  
+  // Metadata
+  respondedAt       DateTime  @default(now())
+  ipAddress         String?
+  userAgent         String?
+  
+  @@unique([challengeId, guardianId])
+  @@index([challengeId])
+}
+
+enum NotificationType {
+  APPROVAL_REQUEST
+  APPROVAL_SUCCESS
+  TRANSACTION_SUCCESS
+  TRANSACTION_FAILED
+  SECURITY_ALERT
+}
+
+enum NotificationChannel {
+  WHATSAPP // Somente Whatsapp API ZuckZapGo
+  EMAIL // Somente Email via SMTP com template perfeito usando nodemail
+  SMS
+  PUSH
+}
+
+enum CertificateType {
+  ROOT_CA           // Root Certificate Authority
+  INTERMEDIATE_CA   // Intermediate CA
+  SERVER_CERT       // Server certificates (backend, HSM)
+  CLIENT_CERT       // Client certificates (guardians, admin)
+  CODE_SIGNING      // Code signing certificates
+}
+```
+
+## Model Relationships
+
+### User → Guardian (1:1)
+- A user can be a guardian
+- Guardian extends user with special permissions
+
+### Guardian → Approval (1:N)
+- Each guardian can make multiple approvals
+- Tracks all approval history
+
+### Transaction → Approval (1:N)
+- Each transaction can have multiple approvals
+- Requires 2 approvals for execution
+
+### User → Wallet (1:N)
+- Each user can have multiple wallets
+- Typically one HOT and one COLD wallet
+
+## Important Indexes
+
+- `Guardian.isActive` - Quick filtering of active guardians
+- `Wallet.walletType` - Separate HOT/COLD queries
+- `Wallet.publicKey` - Fast address lookups
+- `Transaction.status` - Filter by transaction state
+- `Transaction.stellarHash` - Blockchain verification
+- `Notification.userId + sent` - User notification queries
+
+## Data Security
+
+### Encrypted Fields
+- `User.totpSecret` - Encrypted with AES256
+- `Guardian.totpSecret` - Encrypted with AES256
+- `User.passwordHash` - Bcrypt hashed
+
+### HSM Protected
+- `User.hsmKeyName` - Reference to HSM key
+- `Wallet.hsmKeyName` - Reference to HSM key
+- Private keys NEVER stored in database
+
+## Usage Examples
+
+### Create Guardian
+```typescript
+const guardian = await prisma.guardian.create({
+  data: {
+    user: { connect: { id: userId } },
+    role: 'CEO',
+    level: 3,
+    totpSecret: encryptedSecret,
+    totpQrCode: qrCodeDataUrl
+  }
+});
+```
+
+### Check Approvals
+```typescript
+const approvals = await prisma.approval.findMany({
+  where: {
+    transactionId,
+    isValid: true
+  },
+  include: {
+    guardian: {
+      include: { user: true }
+    }
+  }
+});
+```
+
+### Get Pending Transactions
+```typescript
+const pending = await prisma.transaction.findMany({
+  where: {
+    status: 'AWAITING_APPROVAL',
+    requiresApproval: true
+  },
+  include: {
+    approvals: true,
+    fromWallet: true
+  }
+});
+```
+
+## Cross-References
+
+- Main specification: [stellar-custody-mvp.mdc](mdc:.cursor/rules/stellar-custody-mvp.mdc)
+- Setup guide: [setup.mdc](mdc:.cursor/rules/setup.mdc)
+- Index: [index.mdc](mdc:.cursor/rules/index.mdc)
+
+---
+
+**Always refer to this schema when working with database operations!**
