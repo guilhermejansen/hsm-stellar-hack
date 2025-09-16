@@ -81,7 +81,26 @@ services:
       STELLAR_CONTRACT_ID: CCVEIQKVF6C3G52OJ7TLVIPMJXDZ3ABPLLXQAQVDX2BEZHWUPLFWUYSX
       STELLAR_CONTRACT_ADDRESS: CCVEIQKVF6C3G52OJ7TLVIPMJXDZ3ABPLLXQAQVDX2BEZHWUPLFWUYSX
       
+      # Deployer Account (for contract interactions)
+      STELLAR_DEPLOYER_SECRET: SBWUCOVLBNIZPERNDSDRMVUTAA3Q2GEMHQ6FNKJRYD6PTSVRNG4TRBUU
+      STELLAR_DEPLOYER_ADDRESS: GDYR3L2QNF7IZ5RXX7Q4MYZNPDI57CETCHNO45DUYDOSVU4OXZFVHNXS
+      
+      # Guardian Keys (for multi-sig)
+      GUARDIAN_1_SECRET: SCD5OH24CPLZLCFSAFF6OWXURA3CMMFWRULKZQOQC2IA45HB4EJE6CIM
+      GUARDIAN_1_ADDRESS: GAK2TU742A57ERQWNAZ5YEJJAUJUBUNWX2C6BYLIF2ZRVRYFR43ATJDT
+      GUARDIAN_2_SECRET: SB5TO67IIRWYS3XJJBJ7L6GQI6D4XNOD47BM6UNAUNQZTZE6AOALVLGZ
+      GUARDIAN_2_ADDRESS: GAODJIFVVHOGTISA2JYI4HQLIDAXSAJZI7DKXQBSMOKCYTRUCAXTTJW2
+      GUARDIAN_3_SECRET: SAO2LN4UINGQHZ3AYW4QAAWCERT5Y62FKKVHIVPCKO4XO54C5W7QRPH3
+      GUARDIAN_3_ADDRESS: GD2YNO7FGCSRO5JCMGJZEH5LNC664DYHMKIBJZPMV3ZXAPEXTBGH6OLK
+      
+      # Wallet Keys (for transactions)
+      HOT_WALLET_SECRET: SA5UXL6HZGG6LXT6D7EUDGA53DLXJ65NHASES3TLMRAZ74WR7P2JANOC
+      HOT_WALLET_ADDRESS: GCMFYTMZJPDS2ECNYBU5XZ4KE5GHMPX7LYOWQII4TC4XRBO5WSAJDPFM
+      COLD_WALLET_SECRET: SBYMRKSX7GVZIKYEMP4P4ZLHOY7LPKHUTCFBMLNHXTL3RJ4GG2BO6KXB
+      COLD_WALLET_ADDRESS: GCVPYOTR4K2KYNXFC4OFRE2ZVC3CZIRUEIIXUJ7FDNZECZ4VYAVZURKI
+      
       # WhatsApp API (ZuckZapGo)
+      WHATSAPP_ENABLED: true
       WHATSAPP_API_URL: https://api.zuckzapgo.com
       WHATSAPP_TOKEN: "!!qYWdJ61zk3i1AvTfXhzE!!"
       
@@ -100,6 +119,11 @@ services:
       MONTHLY_LIMIT: 1000000
       HIGH_VALUE_THRESHOLD: 1000
       
+      # Development Flags
+      MOCK_HSM: true
+      ENABLE_TEST_ENDPOINTS: true
+      ALLOW_NO_TOTP_FOR_LOW_VALUE: true
+      
       # Guardian Configuration (3 Guardians)
       REQUIRED_APPROVALS_LOW: 2
       REQUIRED_APPROVALS_HIGH: 2
@@ -112,8 +136,8 @@ services:
       
       # Security
       CORS_ORIGIN: "http://localhost:3000,http://localhost:3001"
-      RATE_LIMIT_WINDOW_MS: 900000
-      RATE_LIMIT_MAX_REQUESTS: 100
+      RATE_LIMIT_WINDOW_MS: 1
+      RATE_LIMIT_MAX_REQUESTS: 10000
       
     depends_on:
       postgres:
@@ -126,6 +150,77 @@ services:
       - ./apps/backend/logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==================== FRONTEND ====================
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: stellar-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Application
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      
+      # API Configuration (Docker internal networking)
+      NEXT_PUBLIC_API_BASE_URL: http://backend:3001/api
+      NEXT_PUBLIC_API_URL: http://backend:3001
+      
+      # Next.js Configuration
+      NEXT_TELEMETRY_DISABLED: 1
+      
+      # Security
+      NEXT_PUBLIC_CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      
+      # Stellar Network (Testnet)
+      NEXT_PUBLIC_STELLAR_NETWORK: testnet
+      NEXT_PUBLIC_STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
+      NEXT_PUBLIC_STELLAR_RPC_URL: https://soroban-testnet.stellar.org:443
+      NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      
+      # Smart Contract
+      NEXT_PUBLIC_STELLAR_CONTRACT_ADDRESS: CCVEIQKVF6C3G52OJ7TLVIPMJXDZ3ABPLLXQAQVDX2BEZHWUPLFWUYSX
+      
+      # Features
+      NEXT_PUBLIC_ENABLE_ANALYTICS: false
+      NEXT_PUBLIC_ENABLE_DEBUG: false
+      NEXT_PUBLIC_ENABLE_PWA: false
+      
+      # External Services
+      NEXT_PUBLIC_WHATSAPP_ENABLED: true
+      NEXT_PUBLIC_WHATSAPP_API_URL: https://api.zuckzapgo.com
+      NEXT_PUBLIC_QR_CODE_SERVICE: https://api.qrserver.com
+      NEXT_PUBLIC_STELLAR_EXPLORER_URL: https://testnet.stellar.expert
+      
+      # UI/UX
+      NEXT_PUBLIC_DEFAULT_THEME: light
+      NEXT_PUBLIC_ENABLE_THEME_SWITCH: true
+      NEXT_PUBLIC_APP_NAME: "Stellar Custody"
+      NEXT_PUBLIC_APP_VERSION: "1.0.0"
+      NEXT_PUBLIC_COMPANY_NAME: "Stellar Custody MVP"
+      
+      # Development
+      NEXT_PUBLIC_DEBUG_MODE: false
+      NEXT_PUBLIC_MOCK_HSM: false
+      NEXT_PUBLIC_ENABLE_TEST_ENDPOINTS: false
+      
+      # Monitoring
+      NEXT_PUBLIC_HEALTH_CHECK_URL: /api/health
+      
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - stellar-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
