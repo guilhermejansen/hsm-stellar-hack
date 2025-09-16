@@ -280,7 +280,7 @@ export default function PrivacyPage() {
                 <div className="space-y-4">
               <h4 className="font-medium text-corporate-900 dark:text-corporate-100">Privacy Protection Features</h4>
               <div className="space-y-3">
-                {privacyReport?.data?.privacy?.privacyBenefits?.map((benefit, index) => (
+                {privacyReport?.data?.privacy?.privacyBenefits?.map((benefit: string, index: number) => (
                   <div key={index} className="flex items-start space-x-2">
                     <CheckCircle className="w-4 h-4 text-success-500 mt-0.5 flex-shrink-0" />
                     <span className="text-sm text-corporate-600 dark:text-corporate-300">{benefit}</span>
@@ -311,7 +311,7 @@ export default function PrivacyPage() {
             <div className="space-y-4">
               <h4 className="font-medium text-corporate-900 dark:text-corporate-100">Recommendations</h4>
               <div className="space-y-3">
-                {privacyReport?.data?.recommendations?.map((rec, index) => (
+                {privacyReport?.data?.recommendations?.map((rec: string, index: number) => (
                   <div key={index} className="flex items-start space-x-2">
                     {rec.startsWith('✅') ? (
                       <CheckCircle className="w-4 h-4 text-success-500 mt-0.5 flex-shrink-0" />
