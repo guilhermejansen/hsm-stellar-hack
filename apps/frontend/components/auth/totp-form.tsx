@@ -33,7 +33,6 @@ interface TOTPFormProps {
 export function TOTPForm({ onSubmit, isLoading, error }: TOTPFormProps) {
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [progress, setProgress] = useState(100);
-  const inputRef = useRef<HTMLInputElement>(null);
   
   const {
     register,
@@ -69,8 +68,9 @@ export function TOTPForm({ onSubmit, isLoading, error }: TOTPFormProps) {
 
   // Auto-focus on input
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
+    const input = document.getElementById('totpCode') as HTMLInputElement;
+    if (input) {
+      input.focus();
     }
   }, []);
 
@@ -86,8 +86,9 @@ export function TOTPForm({ onSubmit, isLoading, error }: TOTPFormProps) {
     reset();
     setTimeRemaining(30);
     setProgress(100);
-    if (inputRef.current) {
-      inputRef.current.focus();
+    const input = document.getElementById('totpCode') as HTMLInputElement;
+    if (input) {
+      input.focus();
     }
   };
 
@@ -140,7 +141,6 @@ export function TOTPForm({ onSubmit, isLoading, error }: TOTPFormProps) {
           <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-corporate-400 w-4 h-4" />
           <Input
             id="totpCode"
-            ref={inputRef}
             type="text"
             placeholder="000000"
             maxLength={6}
