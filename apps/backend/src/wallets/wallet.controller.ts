@@ -8,6 +8,7 @@ import {
   Request,
   HttpStatus,
   Query,
+  Logger,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -52,6 +53,8 @@ import {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth("JWT-auth")
 export class WalletController {
+  private readonly logger = new Logger(WalletController.name);
+
   constructor(
     private readonly walletService: WalletService,
     private readonly stellarService: StellarService,
@@ -118,10 +121,17 @@ export class WalletController {
     try {
       const hotWallet = await this.walletService.getHotWallet(req.user.userId);
 
-      // Get Stellar network balance
-      const stellarBalance = await this.stellarService.getAccountInfo(
-        hotWallet.publicKey,
-      );
+      // Get Stellar network balance (with automatic account creation on testnet)
+      let stellarBalance = "0";
+      try {
+        const accountInfo = await this.stellarService.getAccountInfo(
+          hotWallet.publicKey,
+        );
+        stellarBalance = accountInfo.balances[0]?.balance || "0";
+      } catch (error) {
+        this.logger.warn(`⚠️ Could not fetch Stellar balance for ${hotWallet.publicKey}: ${error.message}`);
+        stellarBalance = "0";
+      }
 
       return {
         success: true,
@@ -145,7 +155,7 @@ export class WalletController {
               }
             : undefined,
           childWallets: [],
-          stellarBalance: stellarBalance.balances[0]?.balance || "0",
+          stellarBalance: stellarBalance,
           createdAt: hotWallet.createdAt.toISOString(),
         },
       };
@@ -185,10 +195,17 @@ export class WalletController {
         req.user.userId,
       );
 
-      // Get Stellar network balance
-      const stellarBalance = await this.stellarService.getAccountInfo(
-        coldWallet.publicKey,
-      );
+      // Get Stellar network balance (with automatic account creation on testnet)
+      let stellarBalance = "0";
+      try {
+        const accountInfo = await this.stellarService.getAccountInfo(
+          coldWallet.publicKey,
+        );
+        stellarBalance = accountInfo.balances[0]?.balance || "0";
+      } catch (error) {
+        this.logger.warn(`⚠️ Could not fetch Stellar balance for ${coldWallet.publicKey}: ${error.message}`);
+        stellarBalance = "0";
+      }
 
       return {
         success: true,
@@ -210,7 +227,7 @@ export class WalletController {
             publicKey: child.publicKey,
             walletType: child.walletType,
           })),
-          stellarBalance: stellarBalance.balances[0]?.balance || "0",
+          stellarBalance: stellarBalance,
           createdAt: coldWallet.createdAt.toISOString(),
         },
       };
