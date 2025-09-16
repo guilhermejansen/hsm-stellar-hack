@@ -15,6 +15,7 @@ import { transactionAPI } from '@/lib/api';
 import { queryKeys } from '@/context/query-provider';
 import { TransactionStatusBadge, WalletTypeBadge } from '@/components/common/status-badge';
 import { TableLoading, CardLoading } from '@/components/common/loading-spinner';
+import { StellarExplorerLink } from '@/components/common/stellar-explorer-link';
 import { formatXLMWithSuffix, formatDate, truncateAddress } from '@/lib/utils';
 import { 
   ArrowRightLeft, 
@@ -39,8 +40,8 @@ import {
  * Complete transaction management with privacy protection visualization
  */
 export default function TransactionsPage() {
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [typeFilter, setTypeFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -48,8 +49,8 @@ export default function TransactionsPage() {
   const { data: transactions, isLoading: transactionsLoading } = useQuery({
     queryKey: ['transactions', statusFilter, typeFilter, currentPage],
     queryFn: () => transactionAPI.getTransactions({
-      status: statusFilter || undefined,
-      txType: typeFilter || undefined,
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      txType: typeFilter === 'all' ? undefined : typeFilter,
       page: currentPage,
       limit: 20,
     }),
@@ -71,8 +72,8 @@ export default function TransactionsPage() {
   });
 
   const clearFilters = () => {
-    setStatusFilter('');
-    setTypeFilter('');
+    setStatusFilter('all');
+    setTypeFilter('all');
     setSearchTerm('');
     setCurrentPage(1);
   };
@@ -87,7 +88,7 @@ export default function TransactionsPage() {
             Multi-signature transactions with privacy protection and ephemeral keys
           </p>
         </div>
-        <Link href="/transactions/create">
+        <Link href="/dashboard/transactions/create">
           <Button variant="corporate" size="lg">
             <Plus className="w-4 h-4 mr-2" />
             Create Transaction
@@ -243,7 +244,7 @@ export default function TransactionsPage() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="AWAITING_APPROVAL">Awaiting Approval</SelectItem>
                   <SelectItem value="SUCCESS">Success</SelectItem>
@@ -259,7 +260,7 @@ export default function TransactionsPage() {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="PAYMENT">Payment</SelectItem>
                   <SelectItem value="REBALANCE">Rebalance</SelectItem>
                   <SelectItem value="WITHDRAWAL">Withdrawal</SelectItem>
@@ -415,12 +416,21 @@ export default function TransactionsPage() {
                   id: 'actions',
                   header: 'Actions',
                   cell: ({ row }: any) => (
-                    <Link href={`/transactions/${row.original.id}` as any}>
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-                    </Link>
+                    <div className="flex items-center space-x-2">
+                      <Link href={`/dashboard/transactions/${row.original.id}`}>
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+                      </Link>
+                      {row.original.stellarHash && (
+                        <StellarExplorerLink
+                          stellarHash={row.original.stellarHash}
+                          status={row.original.status}
+                          variant="compact"
+                        />
+                      )}
+                    </div>
                   ),
                 },
               ]}
@@ -437,13 +447,13 @@ export default function TransactionsPage() {
                 No Transactions Found
               </h3>
               <p className="text-corporate-500 dark:text-corporate-400 mb-6">
-                {statusFilter || typeFilter 
+                {statusFilter !== 'all' || typeFilter !== 'all'
                   ? 'No transactions match your current filters'
                   : 'Create your first multi-signature transaction'
                 }
               </p>
-              {!statusFilter && !typeFilter && (
-                <Link href="/transactions/create">
+              {statusFilter === 'all' && typeFilter === 'all' && (
+                <Link href="/dashboard/transactions/create">
                   <Button variant="corporate">
                     <Plus className="w-4 h-4 mr-2" />
                     Create First Transaction
