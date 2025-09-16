@@ -55,15 +55,9 @@ const nextConfig = {
     ];
   },
   
-  // Redirects
+  // Redirects (homepage now serves the marketing landing page)
   async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/dashboard',
-        permanent: false,
-      },
-    ];
+    return [];
   },
   
   // Webpack configuration for Docker optimization
