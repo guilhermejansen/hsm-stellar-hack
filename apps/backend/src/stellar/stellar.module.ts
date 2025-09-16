@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { StellarService } from './stellar.service';
+import { Module } from "@nestjs/common";
+import { StellarService } from "./stellar.service";
 
 /**
  * 🌟 Stellar Module - Blockchain Integration
- * 
+ *
  * Features:
  * - Horizon API integration
  * - Soroban smart contract calls
@@ -13,6 +13,6 @@ import { StellarService } from './stellar.service';
  */
 @Module({
   providers: [StellarService],
-  exports: [StellarService]
+  exports: [StellarService],
 })
 export class StellarModule {}

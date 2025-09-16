@@ -1,10 +1,10 @@
-import { Module } from '@nestjs/common';
-import { WhatsAppService } from './whatsapp.service';
-import { WhatsAppAssetsService } from './whatsapp-assets.service';
+import { Module } from "@nestjs/common";
+import { WhatsAppService } from "./whatsapp.service";
+import { WhatsAppAssetsService } from "./whatsapp-assets.service";
 
 /**
  * 📱 WhatsApp Module - ZuckZapGo API Integration
- * 
+ *
  * Features:
  * - Text notifications
  * - Approval button messages
@@ -14,13 +14,7 @@ import { WhatsAppAssetsService } from './whatsapp-assets.service';
  * - Emergency alerts
  */
 @Module({
-  providers: [
-    WhatsAppAssetsService,
-    WhatsAppService
-  ],
-  exports: [
-    WhatsAppService,
-    WhatsAppAssetsService
-  ]
+  providers: [WhatsAppAssetsService, WhatsAppService],
+  exports: [WhatsAppService, WhatsAppAssetsService],
 })
 export class WhatsAppModule {}

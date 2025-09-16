@@ -1,32 +1,27 @@
-import { 
-  Controller, 
-  Post, 
+import {
+  Controller,
+  Post,
   Get,
-  Body, 
-  UseGuards, 
+  Body,
+  UseGuards,
   Request,
-  HttpStatus
-} from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
-  ApiBody
-} from '@nestjs/swagger';
+  HttpStatus,
+} from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from "@nestjs/swagger";
 
-import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './jwt-auth.guard';
-import { 
-  LoginDto, 
-  LoginResponseDto, 
-  TOTPVerificationDto, 
+import { AuthService } from "./auth.service";
+import { JwtAuthGuard } from "./jwt-auth.guard";
+import {
+  LoginDto,
+  LoginResponseDto,
+  TOTPVerificationDto,
   TOTPVerificationResponseDto,
-  SessionInfoDto
-} from '../common/dto/auth.dto';
+  SessionInfoDto,
+} from "../common/dto/auth.dto";
 
 /**
  * 🔐 Authentication Controller - Complete User Authentication API
- * 
+ *
  * Following security-practices.mdc authentication layers:
  * - Email + Password login with session tokens
  * - TOTP verification for guardians
@@ -35,14 +30,14 @@ import {
  * - Complete audit trail
  */
 
-@ApiTags('Authentication')
-@Controller('auth')
+@ApiTags("Authentication")
+@Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('login')
+  @Post("login")
   @ApiOperation({
-    summary: 'User login with email and password',
+    summary: "User login with email and password",
     description: `
       **Initial authentication step for Stellar Custody MVP**
       
@@ -68,96 +63,96 @@ export class AuthController {
       - Session token for TOTP verification step
       - User information and capabilities
       - TOTP requirement status
-    `
+    `,
   })
-  @ApiBody({ 
+  @ApiBody({
     type: LoginDto,
-    description: 'User credentials for authentication'
+    description: "User credentials for authentication",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Login successful - session token generated',
+    description: "Login successful - session token generated",
     type: LoginResponseDto,
     schema: {
       example: {
         success: true,
         data: {
-          sessionToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbHJ4MTIzNDU2Nzg5MHVzZXIwMSIsImVtYWlsIjoiY2VvQHN0ZWxsYXJjdXN0b2R5LmNvbSIsInJvbGUiOiJDRU8iLCJ0eXBlIjoic2Vzc2lvbiIsImlhdCI6MTczNDUyOTgwMCwiZXhwIjoxNzM0NTMwNzAwfQ.signature_here',
+          sessionToken:
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbHJ4MTIzNDU2Nzg5MHVzZXIwMSIsImVtYWlsIjoiY2VvQHN0ZWxsYXJjdXN0b2R5LmNvbSIsInJvbGUiOiJDRU8iLCJ0eXBlIjoic2Vzc2lvbiIsImlhdCI6MTczNDUyOTgwMCwiZXhwIjoxNzM0NTMwNzAwfQ.signature_here",
           requiresTOTP: true,
-          totpChallenge: 'challenge_abc123def456789',
+          totpChallenge: "challenge_abc123def456789",
           user: {
-            id: 'clrx1234567890user01',
-            email: 'ceo@stellarcustody.com',
-            name: 'João Silva Santos',
-            role: 'CEO',
+            id: "clrx1234567890user01",
+            email: "ceo@stellarcustody.com",
+            name: "João Silva Santos",
+            role: "CEO",
             isGuardian: true,
-            hsmActivated: true
-          }
+            hsmActivated: true,
+          },
         },
-        message: 'Login successful. TOTP verification required for full access.',
+        message:
+          "Login successful. TOTP verification required for full access.",
         metadata: {
-          sessionDuration: '15 minutes',
-          nextStep: 'TOTP verification',
-          timestamp: '2024-12-14T10:30:00Z'
-        }
-      }
-    }
+          sessionDuration: "15 minutes",
+          nextStep: "TOTP verification",
+          timestamp: "2024-12-14T10:30:00Z",
+        },
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
-    description: 'Invalid credentials',
+    description: "Invalid credentials",
     schema: {
       example: {
         success: false,
         error: {
-          code: 'INVALID_CREDENTIALS',
-          message: 'Invalid email or password'
+          code: "INVALID_CREDENTIALS",
+          message: "Invalid email or password",
         },
-        statusCode: 401
-      }
-    }
+        statusCode: 401,
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'Rate limit exceeded',
+    description: "Rate limit exceeded",
     schema: {
       example: {
-        error: 'Too many requests',
-        message: 'Rate limit exceeded. Please try again later.',
-        statusCode: 429
-      }
-    }
+        error: "Too many requests",
+        message: "Rate limit exceeded. Please try again later.",
+        statusCode: 429,
+      },
+    },
   })
-  async login(
-    @Body() loginDto: LoginDto,
-    @Request() req: any
-  ) {
+  async login(@Body() loginDto: LoginDto, @Request() req: any) {
     try {
       const result = await this.authService.login(
         loginDto.email,
         loginDto.password,
         req.ip,
-        req.get('user-agent')
+        req.get("user-agent"),
       );
 
       return {
         success: true,
         data: result,
-        message: 'Login successful. TOTP verification required for full access.',
+        message:
+          "Login successful. TOTP verification required for full access.",
         metadata: {
-          sessionDuration: '15 minutes',
-          nextStep: 'TOTP verification',
-          timestamp: new Date().toISOString()
-        }
+          sessionDuration: "15 minutes",
+          nextStep: "TOTP verification",
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
     }
   }
 
-  @Post('verify-totp')
+  @Post("verify-totp")
   @ApiOperation({
-    summary: 'Verify TOTP and get full access token',
+    summary: "Verify TOTP and get full access token",
     description: `
       **Second authentication step - TOTP verification**
       
@@ -181,73 +176,76 @@ export class AuthController {
       - HSM activation status
       - Guardian level included
       - Refresh token support
-    `
+    `,
   })
   @UseGuards(JwtAuthGuard)
-  @ApiBody({ 
+  @ApiBearerAuth("JWT-auth")
+  @ApiBody({
     type: TOTPVerificationDto,
-    description: 'TOTP code from authenticator app'
+    description: "TOTP code from authenticator app",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'TOTP verified successfully - full access token generated',
+    description: "TOTP verified successfully - full access token generated",
     type: TOTPVerificationResponseDto,
     schema: {
       example: {
         success: true,
         data: {
-          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbHJ4MTIzNDU2Nzg5MHVzZXIwMSIsImVtYWlsIjoiY2VvQHN0ZWxsYXJjdXN0b2R5LmNvbSIsInJvbGUiOiJDRU8iLCJsZXZlbCI6MywidHlwZSI6ImFjY2VzcyIsImhzbUFjdGl2YXRlZCI6dHJ1ZSwiaWF0IjoxNzM0NTI5ODAwLCJleHAiOjE3MzQ2MTYyMDB9.signature_here',
-          expiresIn: '24h',
-          tokenType: 'Bearer'
+          accessToken:
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbHJ4MTIzNDU2Nzg5MHVzZXIwMSIsImVtYWlsIjoiY2VvQHN0ZWxsYXJjdXN0b2R5LmNvbSIsInJvbGUiOiJDRU8iLCJsZXZlbCI6MywidHlwZSI6ImFjY2VzcyIsImhzbUFjdGl2YXRlZCI6dHJ1ZSwiaWF0IjoxNzM0NTI5ODAwLCJleHAiOjE3MzQ2MTYyMDB9.signature_here",
+          expiresIn: "24h",
+          tokenType: "Bearer",
         },
-        message: 'TOTP verified successfully. Full access granted.',
+        message: "TOTP verified successfully. Full access granted.",
         metadata: {
-          tokenType: 'access',
-          permissions: ['guardian', 'transaction_approval', 'wallet_management'],
+          tokenType: "access",
+          permissions: [
+            "guardian",
+            "transaction_approval",
+            "wallet_management",
+          ],
           hsmPartitionActive: true,
-          guardianRole: 'CEO',
+          guardianRole: "CEO",
           guardianLevel: 3,
-          timestamp: '2024-12-14T10:30:00Z'
-        }
-      }
-    }
+          timestamp: "2024-12-14T10:30:00Z",
+        },
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
-    description: 'Invalid TOTP code or session expired',
+    description: "Invalid TOTP code or session expired",
     schema: {
       example: {
         success: false,
         error: {
-          code: 'INVALID_TOTP',
-          message: 'Invalid TOTP code or code already used'
+          code: "INVALID_TOTP",
+          message: "Invalid TOTP code or code already used",
         },
-        statusCode: 401
-      }
-    }
+        statusCode: 401,
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid TOTP format',
+    description: "Invalid TOTP format",
     schema: {
       example: {
         success: false,
         error: {
-          code: 'INVALID_TOTP_FORMAT',
-          message: 'TOTP code must be exactly 6 digits'
+          code: "INVALID_TOTP_FORMAT",
+          message: "TOTP code must be exactly 6 digits",
         },
-        statusCode: 400
-      }
-    }
+        statusCode: 400,
+      },
+    },
   })
-  async verifyTOTP(
-    @Body() totpDto: TOTPVerificationDto,
-    @Request() req: any
-  ) {
+  async verifyTOTP(@Body() totpDto: TOTPVerificationDto, @Request() req: any) {
     try {
       const accessToken = await this.authService.generateAccessToken(
         req.user.userId,
-        totpDto.totpCode
+        totpDto.totpCode,
       );
 
       // Get user info for metadata
@@ -257,74 +255,76 @@ export class AuthController {
         success: true,
         data: {
           accessToken,
-          expiresIn: '24h',
-          tokenType: 'Bearer'
+          expiresIn: "24h",
+          tokenType: "Bearer",
         },
-        message: 'TOTP verified successfully. Full access granted.',
+        message: "TOTP verified successfully. Full access granted.",
         metadata: {
-          tokenType: 'access',
-          permissions: userInfo.isGuardian 
-            ? ['guardian', 'transaction_approval', 'wallet_management']
-            : ['user', 'view_only'],
+          tokenType: "access",
+          permissions: userInfo.isGuardian
+            ? ["guardian", "transaction_approval", "wallet_management"]
+            : ["user", "view_only"],
           hsmPartitionActive: userInfo.hsmActivated,
           guardianRole: userInfo.role,
           guardianLevel: userInfo.level,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
     }
   }
 
-  @Get('session/info')
+  @Get("session/info")
   @ApiOperation({
-    summary: 'Get current session information',
-    description: 'Retrieve information about the current authenticated session'
+    summary: "Get current session information",
+    description: "Retrieve information about the current authenticated session",
   })
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("JWT-auth")
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Session information retrieved',
-    type: SessionInfoDto
+    description: "Session information retrieved",
+    type: SessionInfoDto,
   })
   async getSessionInfo(@Request() req: any) {
     try {
       return {
         success: true,
         data: {
-          sessionId: req.user.sessionId || 'current_session',
+          sessionId: req.user.sessionId || "current_session",
           userId: req.user.userId,
           createdAt: new Date().toISOString(),
           lastActivity: new Date().toISOString(),
           ipAddress: req.ip,
-          userAgent: req.get('user-agent')
-        }
+          userAgent: req.get("user-agent"),
+        },
       };
     } catch (error) {
       throw error;
     }
   }
 
-  @Post('logout')
+  @Post("logout")
   @ApiOperation({
-    summary: 'Logout and invalidate session',
-    description: 'Invalidate current session and access token'
+    summary: "Logout and invalidate session",
+    description: "Invalidate current session and access token",
   })
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("JWT-auth")
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Logout successful'
+    description: "Logout successful",
   })
   async logout(@Request() req: any) {
     try {
       // In production, invalidate token in Redis/database
       return {
         success: true,
-        message: 'Logout successful',
+        message: "Logout successful",
         metadata: {
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;

@@ -1,14 +1,14 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
-import { AppModule } from '../src/app.module';
+import { Test, TestingModule } from "@nestjs/testing";
+import { INestApplication } from "@nestjs/common";
+import * as request from "supertest";
+import { AppModule } from "../src/app.module";
 
 /**
  * 🧪 E2E Tests - Basic application tests
- * 
+ *
  * Simple tests to verify the application boots correctly
  */
-describe('Stellar Custody MVP (e2e)', () => {
+describe("Stellar Custody MVP (e2e)", () => {
   let app: INestApplication;
 
   beforeEach(async () => {
@@ -24,19 +24,17 @@ describe('Stellar Custody MVP (e2e)', () => {
     await app.close();
   });
 
-  it('/health (GET)', () => {
+  it("/health (GET)", () => {
     return request(app.getHttpServer())
-      .get('/health')
+      .get("/health")
       .expect(200)
       .expect((res) => {
-        expect(res.body.status).toBe('ok');
-        expect(res.body.service).toBe('stellar-custody-mvp-backend');
+        expect(res.body.status).toBe("ok");
+        expect(res.body.service).toBe("stellar-custody-mvp-backend");
       });
   });
 
-  it('should have Swagger documentation', () => {
-    return request(app.getHttpServer())
-      .get('/api')
-      .expect(200);
+  it("should have Swagger documentation", () => {
+    return request(app.getHttpServer()).get("/api").expect(200);
   });
 });

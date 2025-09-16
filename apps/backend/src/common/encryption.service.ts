@@ -1,10 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createCipheriv, createDecipheriv, randomBytes, createHmac } from 'crypto';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  createHmac,
+} from "crypto";
 
 /**
  * 🔐 Encryption Service - AES-256-GCM encryption for sensitive data
- * 
+ *
  * Used for encrypting:
  * - TOTP secrets
  * - PII data (before HSM storage)
@@ -14,17 +19,19 @@ import { createCipheriv, createDecipheriv, randomBytes, createHmac } from 'crypt
 @Injectable()
 export class EncryptionService {
   private readonly logger = new Logger(EncryptionService.name);
-  private readonly algorithm = 'aes-256-gcm';
+  private readonly algorithm = "aes-256-gcm";
   private readonly key: Buffer;
 
   constructor(private readonly configService: ConfigService) {
-    const encryptionKey = this.configService.get('ENCRYPTION_KEY');
+    const encryptionKey = this.configService.get("ENCRYPTION_KEY");
     if (!encryptionKey || encryptionKey.length !== 64) {
-      throw new Error('ENCRYPTION_KEY must be exactly 64 characters (32 bytes hex)');
+      throw new Error(
+        "ENCRYPTION_KEY must be exactly 64 characters (32 bytes hex)",
+      );
     }
-    
-    this.key = Buffer.from(encryptionKey, 'hex');
-    this.logger.log('✅ Encryption service initialized');
+
+    this.key = Buffer.from(encryptionKey, "hex");
+    this.logger.log("✅ Encryption service initialized");
   }
 
   /**
@@ -34,17 +41,19 @@ export class EncryptionService {
     try {
       const iv = randomBytes(16);
       const cipher = createCipheriv(this.algorithm, this.key, iv);
-      
-      let encrypted = cipher.update(text, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-      
+
+      let encrypted = cipher.update(text, "utf8", "hex");
+      encrypted += cipher.final("hex");
+
       const authTag = cipher.getAuthTag();
-      
+
       // Format: iv:authTag:encrypted
-      return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+      return (
+        iv.toString("hex") + ":" + authTag.toString("hex") + ":" + encrypted
+      );
     } catch (error) {
-      this.logger.error('❌ Encryption failed:', error.message);
-      throw new Error('Encryption failed');
+      this.logger.error("❌ Encryption failed:", error.message);
+      throw new Error("Encryption failed");
     }
   }
 
@@ -53,25 +62,25 @@ export class EncryptionService {
    */
   decrypt(encryptedData: string): string {
     try {
-      const parts = encryptedData.split(':');
+      const parts = encryptedData.split(":");
       if (parts.length !== 3) {
-        throw new Error('Invalid encrypted data format');
+        throw new Error("Invalid encrypted data format");
       }
 
-      const iv = Buffer.from(parts[0], 'hex');
-      const authTag = Buffer.from(parts[1], 'hex');
+      const iv = Buffer.from(parts[0], "hex");
+      const authTag = Buffer.from(parts[1], "hex");
       const encrypted = parts[2];
-      
+
       const decipher = createDecipheriv(this.algorithm, this.key, iv);
       decipher.setAuthTag(authTag);
-      
-      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      
+
+      let decrypted = decipher.update(encrypted, "hex", "utf8");
+      decrypted += decipher.final("utf8");
+
       return decrypted;
     } catch (error) {
-      this.logger.error('❌ Decryption failed:', error.message);
-      throw new Error('Decryption failed');
+      this.logger.error("❌ Decryption failed:", error.message);
+      throw new Error("Decryption failed");
     }
   }
 
@@ -79,7 +88,7 @@ export class EncryptionService {
    * Create HMAC for data integrity
    */
   createHmac(data: string): string {
-    return createHmac('sha256', this.key).update(data).digest('hex');
+    return createHmac("sha256", this.key).update(data).digest("hex");
   }
 
   /**

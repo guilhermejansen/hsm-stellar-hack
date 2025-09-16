@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { MTLSService } from './mtls.service';
+import { Module } from "@nestjs/common";
+import { MTLSService } from "./mtls.service";
 
 /**
  * 🔒 mTLS Module - Mutual TLS Certificate Management
- * 
+ *
  * Features:
  * - Certificate generation
  * - Certificate validation
@@ -12,6 +12,6 @@ import { MTLSService } from './mtls.service';
  */
 @Module({
   providers: [MTLSService],
-  exports: [MTLSService]
+  exports: [MTLSService],
 })
 export class MTLSModule {}

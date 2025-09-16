@@ -1,10 +1,10 @@
-import { Module } from '@nestjs/common';
-import { KYCService } from './kyc.service';
-import { HSMModule } from '../hsm/hsm.module';
+import { Module } from "@nestjs/common";
+import { KYCService } from "./kyc.service";
+import { HSMModule } from "../hsm/hsm.module";
 
 /**
  * 📋 KYC Module - Know Your Customer Processing
- * 
+ *
  * Features:
  * - Complete KYC workflow
  * - HSM partition creation
@@ -15,6 +15,6 @@ import { HSMModule } from '../hsm/hsm.module';
 @Module({
   imports: [HSMModule],
   providers: [KYCService],
-  exports: [KYCService]
+  exports: [KYCService],
 })
 export class KYCModule {}

@@ -1,68 +1,68 @@
-import { 
-  Controller, 
-  Post, 
-  Get, 
-  Put, 
-  Body, 
-  Param, 
-  UseGuards, 
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  UseGuards,
   Request,
-  HttpStatus
-} from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
-  ApiBearerAuth, 
+  HttpStatus,
+} from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
   ApiSecurity,
   ApiParam,
-  ApiBody
-} from '@nestjs/swagger';
+  ApiBody,
+} from "@nestjs/swagger";
 
-import { GuardianService } from './guardian.service';
-import { WhatsAppService } from '../whatsapp/whatsapp.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TOTPAuthGuard } from '../auth/totp-auth.guard';
-import { AuditService } from '../common/audit.service';
-import { 
-  RegisterGuardianDto, 
-  ActivateGuardianDto, 
+import { GuardianService } from "./guardian.service";
+import { WhatsAppService } from "../whatsapp/whatsapp.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { TOTPAuthGuard } from "../auth/totp-auth.guard";
+import { AuditService } from "../common/audit.service";
+import {
+  RegisterGuardianDto,
+  ActivateGuardianDto,
   UpdateGuardianStatusDto,
   GuardianResponseDto,
-  GuardianTOTPSetupDto
-} from '../common/dto/guardian.dto';
+  GuardianTOTPSetupDto,
+} from "../common/dto/guardian.dto";
 
 /**
  * 👥 Guardian Controller - 3 Guardian Management API
- * 
+ *
  * Manages the 3-guardian system (CEO, CFO, CTO) following FINAL_ARCHITECTURE_SUMMARY.mdc:
  * - Guardian registration with KYC and HSM partition creation
  * - TOTP setup and activation
  * - Guardian status management
  * - Approval tracking and statistics
- * 
+ *
  * Security:
  * - JWT authentication required
  * - TOTP required for sensitive operations
  * - Complete audit logging
  * - Rate limiting applied
  */
-@ApiTags('Guardians')
-@Controller('guardians')
+@ApiTags("Guardians")
+@Controller("guardians")
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth('JWT-auth')
+@ApiBearerAuth("JWT-auth")
 export class GuardianController {
   constructor(
     private readonly guardianService: GuardianService,
     private readonly whatsappService: WhatsAppService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
   ) {}
 
   // ==================== GUARDIAN REGISTRATION ====================
 
-  @Post('register')
+  @Post("register")
   @ApiOperation({
-    summary: 'Register new guardian (Admin only)',
+    summary: "Register new guardian (Admin only)",
     description: `
       **Register a new guardian in the 3-guardian system (CEO, CFO, CTO)**
       
@@ -89,54 +89,54 @@ export class GuardianController {
       - Guardian receives WhatsApp with QR code
       - Guardian scans QR with Google Authenticator
       - Guardian activates HSM partition with first TOTP
-    `
+    `,
   })
-  @ApiBody({ 
+  @ApiBody({
     type: RegisterGuardianDto,
-    description: 'Guardian registration data with KYC information'
+    description: "Guardian registration data with KYC information",
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Guardian registered successfully',
+    description: "Guardian registered successfully",
     type: GuardianTOTPSetupDto,
     schema: {
       example: {
-        guardianId: 'clrx1234567890guard1',
+        guardianId: "clrx1234567890guard1",
         totpSetup: {
-          secret: 'JBSWY3DPEHPK3PXP',
-          qrCodeUrl: 'data:image/png;base64,iVBORw0KGgo...',
-          backupCodes: ['12345678', '87654321'],
-          manualEntryKey: 'JBSWY3DPEHPK3PXP',
-          hsmPartitionId: 'user_abc123def456'
+          secret: "JBSWY3DPEHPK3PXP",
+          qrCodeUrl: "data:image/png;base64,iVBORw0KGgo...",
+          backupCodes: ["12345678", "87654321"],
+          manualEntryKey: "JBSWY3DPEHPK3PXP",
+          hsmPartitionId: "user_abc123def456",
         },
         nextSteps: [
-          'Scan QR code with Google Authenticator',
-          'Enter first TOTP code to activate HSM partition',
-          'Complete guardian activation process'
-        ]
-      }
-    }
+          "Scan QR code with Google Authenticator",
+          "Enter first TOTP code to activate HSM partition",
+          "Complete guardian activation process",
+        ],
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid data or role already taken',
+    description: "Invalid data or role already taken",
     schema: {
       example: {
-        error: 'Guardian role CEO is already assigned',
-        message: 'Bad Request',
-        statusCode: 400
-      }
-    }
+        error: "Guardian role CEO is already assigned",
+        message: "Bad Request",
+        statusCode: 400,
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
-    description: 'Admin authentication required'
+    description: "Admin authentication required",
   })
   @UseGuards(TOTPAuthGuard)
-  @ApiSecurity('TOTP')
+  @ApiSecurity("TOTP")
   async registerGuardian(
     @Body() registerDto: RegisterGuardianDto,
-    @Request() req: any
+    @Request() req: any,
   ) {
     try {
       // Register guardian with complete KYC and HSM setup
@@ -148,29 +148,29 @@ export class GuardianController {
         level: registerDto.level as 1 | 2 | 3,
         kycData: {
           ...registerDto.kycData,
-          occupation: 'Guardian Executive'
-        }
+          occupation: "Guardian Executive",
+        },
       });
 
       // Send TOTP QR code via WhatsApp
       await this.whatsappService.sendTOTPSetup(
         registerDto.phone,
         result.totpSetup.qrCodeUrl,
-        registerDto.role
+        registerDto.role,
       );
 
       return {
         success: true,
         data: result,
-        message: `Guardian ${registerDto.role} registered successfully. TOTP QR code sent via WhatsApp.`
+        message: `Guardian ${registerDto.role} registered successfully. TOTP QR code sent via WhatsApp.`,
       };
     } catch (error) {
       await this.auditService.logGuardianAction(
-        'unknown',
-        'registration_failed',
-        'failure',
+        "unknown",
+        "registration_failed",
+        "failure",
         { error: error.message, role: registerDto.role },
-        req
+        req,
       );
       throw error;
     }
@@ -178,9 +178,9 @@ export class GuardianController {
 
   // ==================== GUARDIAN ACTIVATION ====================
 
-  @Post(':id/activate')
+  @Post(":id/activate")
   @ApiOperation({
-    summary: 'Activate guardian HSM partition',
+    summary: "Activate guardian HSM partition",
     description: `
       **Activate guardian's HSM partition with first TOTP verification**
       
@@ -200,56 +200,61 @@ export class GuardianController {
       - TOTP code must be valid and not previously used
       - HSM partition remains locked until activation
       - Complete audit trail maintained
-    `
+    `,
   })
   @ApiParam({
-    name: 'id',
-    description: 'Guardian ID',
-    example: 'clrx1234567890guard1'
+    name: "id",
+    description: "Guardian ID",
+    example: "clrx1234567890guard1",
   })
-  @ApiBody({ 
+  @ApiBody({
     type: ActivateGuardianDto,
-    description: 'Guardian ID and first TOTP code'
+    description: "Guardian ID and first TOTP code",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Guardian activated successfully',
+    description: "Guardian activated successfully",
     schema: {
       example: {
         success: true,
-        message: 'Guardian activated successfully. HSM partition is now active.',
+        message:
+          "Guardian activated successfully. HSM partition is now active.",
         data: {
-          guardianId: 'clrx1234567890guard1',
-          role: 'CEO',
+          guardianId: "clrx1234567890guard1",
+          role: "CEO",
           hsmActivated: true,
-          activatedAt: '2024-12-14T10:30:00Z'
-        }
-      }
-    }
+          activatedAt: "2024-12-14T10:30:00Z",
+        },
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid TOTP code or guardian already activated'
+    description: "Invalid TOTP code or guardian already activated",
   })
   async activateGuardian(
-    @Param('id') guardianId: string,
+    @Param("id") guardianId: string,
     @Body() activateDto: ActivateGuardianDto,
-    @Request() req: any
+    @Request() req: any,
   ) {
     try {
-      await this.guardianService.activateGuardian(guardianId, activateDto.totpCode);
+      await this.guardianService.activateGuardian(
+        guardianId,
+        activateDto.totpCode,
+      );
 
       const guardian = await this.guardianService.getGuardianById(guardianId);
 
       return {
         success: true,
-        message: 'Guardian activated successfully. HSM partition is now active.',
+        message:
+          "Guardian activated successfully. HSM partition is now active.",
         data: {
           guardianId: guardian.id,
           role: guardian.role,
           hsmActivated: guardian.user.hsmActivated,
-          activatedAt: new Date().toISOString()
-        }
+          activatedAt: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
@@ -260,7 +265,7 @@ export class GuardianController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all active guardians',
+    summary: "Get all active guardians",
     description: `
       **Retrieve all active guardians in the system**
       
@@ -276,41 +281,42 @@ export class GuardianController {
       - Limits (daily, monthly)
       - Statistics (total approvals, last approval)
       - Stellar wallet address
-    `
+    `,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'List of active guardians',
+    description: "List of active guardians",
     type: [GuardianResponseDto],
     schema: {
       example: [
         {
-          id: 'clrx1234567890guard1',
-          role: 'CEO',
-          name: 'João Silva Santos',
-          email: 'ceo@stellarcustody.com',
-          phone: '+5511999999001',
+          id: "clrx1234567890guard1",
+          role: "CEO",
+          name: "João Silva Santos",
+          email: "ceo@stellarcustody.com",
+          phone: "+5511999999001",
           level: 3,
           isActive: true,
           totpVerified: true,
           hsmActivated: true,
-          stellarPublicKey: 'GAK2TU742A57ERQWNAZ5YEJJAUJUBUNWX2C6BYLIF2ZRVRYFR43ATJDT',
-          dailyLimit: '100000.0000000',
-          monthlyLimit: '1000000.0000000',
+          stellarPublicKey:
+            "GAK2TU742A57ERQWNAZ5YEJJAUJUBUNWX2C6BYLIF2ZRVRYFR43ATJDT",
+          dailyLimit: "100000.0000000",
+          monthlyLimit: "1000000.0000000",
           totalApprovals: 42,
-          lastApprovalAt: '2024-12-14T10:30:00Z',
-          createdAt: '2024-12-01T09:00:00Z'
-        }
-      ]
-    }
+          lastApprovalAt: "2024-12-14T10:30:00Z",
+          createdAt: "2024-12-01T09:00:00Z",
+        },
+      ],
+    },
   })
   async getActiveGuardians() {
     try {
       const guardians = await this.guardianService.getActiveGuardians();
-      
+
       return {
         success: true,
-        data: guardians.map(guardian => ({
+        data: guardians.map((guardian) => ({
           id: guardian.id,
           role: guardian.role,
           name: guardian.user.name,
@@ -325,44 +331,44 @@ export class GuardianController {
           monthlyLimit: guardian.monthlyLimit.toString(),
           totalApprovals: guardian.totalApprovals,
           lastApprovalAt: guardian.lastApprovalAt?.toISOString(),
-          createdAt: guardian.createdAt.toISOString()
+          createdAt: guardian.createdAt.toISOString(),
         })),
         metadata: {
           count: guardians.length,
           maxGuardians: 3,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
     }
   }
 
-  @Get(':id')
+  @Get(":id")
   @ApiOperation({
-    summary: 'Get guardian by ID',
-    description: 'Retrieve detailed information about a specific guardian'
+    summary: "Get guardian by ID",
+    description: "Retrieve detailed information about a specific guardian",
   })
   @ApiParam({
-    name: 'id',
-    description: 'Guardian ID',
-    example: 'clrx1234567890guard1'
+    name: "id",
+    description: "Guardian ID",
+    example: "clrx1234567890guard1",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Guardian details',
-    type: GuardianResponseDto
+    description: "Guardian details",
+    type: GuardianResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Guardian not found'
+    description: "Guardian not found",
   })
-  async getGuardianById(@Param('id') guardianId: string) {
+  async getGuardianById(@Param("id") guardianId: string) {
     try {
       const guardian = await this.guardianService.getGuardianById(guardianId);
-      
+
       if (!guardian) {
-        throw new Error('Guardian not found');
+        throw new Error("Guardian not found");
       }
 
       return {
@@ -383,14 +389,15 @@ export class GuardianController {
           totalApprovals: guardian.totalApprovals,
           lastApprovalAt: guardian.lastApprovalAt?.toISOString(),
           createdAt: guardian.createdAt.toISOString(),
-          recentApprovals: guardian.approvals?.map(approval => ({
-            transactionId: approval.transaction.id,
-            amount: approval.transaction.amount.toString(),
-            toAddress: approval.transaction.toAddress,
-            status: approval.transaction.status,
-            approvedAt: approval.validatedAt.toISOString()
-          })) || []
-        }
+          recentApprovals:
+            guardian.approvals?.map((approval) => ({
+              transactionId: approval.transaction.id,
+              amount: approval.transaction.amount.toString(),
+              toAddress: approval.transaction.toAddress,
+              status: approval.transaction.status,
+              approvedAt: approval.validatedAt.toISOString(),
+            })) || [],
+        },
       };
     } catch (error) {
       throw error;
@@ -399,9 +406,9 @@ export class GuardianController {
 
   // ==================== GUARDIAN MANAGEMENT ====================
 
-  @Put(':id/status')
+  @Put(":id/status")
   @ApiOperation({
-    summary: 'Update guardian status',
+    summary: "Update guardian status",
     description: `
       **Activate or deactivate a guardian (Admin only)**
       
@@ -415,50 +422,50 @@ export class GuardianController {
       - Temporarily deactivate guardian (vacation, leave)
       - Reactivate guardian after absence
       - Emergency guardian management
-    `
+    `,
   })
   @ApiParam({
-    name: 'id',
-    description: 'Guardian ID to update',
-    example: 'clrx1234567890guard1'
+    name: "id",
+    description: "Guardian ID to update",
+    example: "clrx1234567890guard1",
   })
-  @ApiBody({ 
+  @ApiBody({
     type: UpdateGuardianStatusDto,
-    description: 'New status and reason for change'
+    description: "New status and reason for change",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Guardian status updated successfully',
+    description: "Guardian status updated successfully",
     schema: {
       example: {
         success: true,
-        message: 'Guardian status updated successfully',
+        message: "Guardian status updated successfully",
         data: {
-          guardianId: 'clrx1234567890guard1',
-          role: 'CEO',
+          guardianId: "clrx1234567890guard1",
+          role: "CEO",
           previousStatus: true,
           newStatus: false,
-          reason: 'Guardian temporarily unavailable',
-          updatedAt: '2024-12-14T10:30:00Z'
-        }
-      }
-    }
+          reason: "Guardian temporarily unavailable",
+          updatedAt: "2024-12-14T10:30:00Z",
+        },
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Cannot deactivate - minimum guardians required'
+    description: "Cannot deactivate - minimum guardians required",
   })
   @UseGuards(TOTPAuthGuard)
-  @ApiSecurity('TOTP')
+  @ApiSecurity("TOTP")
   async updateGuardianStatus(
-    @Param('id') guardianId: string,
+    @Param("id") guardianId: string,
     @Body() updateDto: UpdateGuardianStatusDto,
-    @Request() req: any
+    @Request() req: any,
   ) {
     try {
       const guardian = await this.guardianService.getGuardianById(guardianId);
       if (!guardian) {
-        throw new Error('Guardian not found');
+        throw new Error("Guardian not found");
       }
 
       const previousStatus = guardian.isActive;
@@ -466,21 +473,21 @@ export class GuardianController {
       await this.guardianService.updateGuardianStatus(
         guardianId,
         updateDto.isActive,
-        updateDto.reason || 'Status updated by admin',
-        req.user.userId
+        updateDto.reason || "Status updated by admin",
+        req.user.userId,
       );
 
       return {
         success: true,
-        message: 'Guardian status updated successfully',
+        message: "Guardian status updated successfully",
         data: {
           guardianId,
           role: guardian.role,
           previousStatus,
           newStatus: updateDto.isActive,
           reason: updateDto.reason,
-          updatedAt: new Date().toISOString()
-        }
+          updatedAt: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
@@ -489,9 +496,9 @@ export class GuardianController {
 
   // ==================== GUARDIAN STATISTICS ====================
 
-  @Get('stats/overview')
+  @Get("stats/overview")
   @ApiOperation({
-    summary: 'Get guardian system statistics',
+    summary: "Get guardian system statistics",
     description: `
       **System-wide guardian statistics and health metrics**
       
@@ -507,11 +514,11 @@ export class GuardianController {
       - System health monitoring
       - Compliance reporting
       - Operational metrics
-    `
+    `,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Guardian system statistics',
+    description: "Guardian system statistics",
     schema: {
       example: {
         success: true,
@@ -521,36 +528,36 @@ export class GuardianController {
             active: 3,
             verified: 3,
             hsmActivated: 3,
-            completionRate: 100
+            completionRate: 100,
           },
           approvals: {
             total: 126,
             avgPerGuardian: 42,
-            last24Hours: 8
+            last24Hours: 8,
           },
           roles: {
             CEO: { active: true, approvals: 45 },
             CFO: { active: true, approvals: 42 },
-            CTO: { active: true, approvals: 39 }
+            CTO: { active: true, approvals: 39 },
           },
           systemHealth: {
             minGuardiansAvailable: true,
             allHSMPartitionsActive: true,
-            totpVerificationRate: 100
-          }
+            totpVerificationRate: 100,
+          },
         },
         metadata: {
-          timestamp: '2024-12-14T10:30:00Z',
-          calculatedAt: '2024-12-14T10:30:00Z'
-        }
-      }
-    }
+          timestamp: "2024-12-14T10:30:00Z",
+          calculatedAt: "2024-12-14T10:30:00Z",
+        },
+      },
+    },
   })
   async getGuardianStats() {
     try {
       const [stats, minGuardians] = await Promise.all([
         this.guardianService.getGuardianStats(),
-        this.guardianService.hasMinimumGuardians()
+        this.guardianService.hasMinimumGuardians(),
       ]);
 
       return {
@@ -561,73 +568,74 @@ export class GuardianController {
             active: stats.active,
             verified: stats.verified,
             hsmActivated: stats.hsmActivated,
-            completionRate: stats.completionRate
+            completionRate: stats.completionRate,
           },
           approvals: {
             total: stats.totalApprovals,
-            avgPerGuardian: stats.avgApprovalsPerGuardian
+            avgPerGuardian: stats.avgApprovalsPerGuardian,
           },
           systemHealth: {
             minGuardiansAvailable: minGuardians.hasMinimum,
             activeCount: minGuardians.activeCount,
             minimumRequired: minGuardians.minimumRequired,
-            roles: minGuardians.roles
-          }
+            roles: minGuardians.roles,
+          },
         },
         metadata: {
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
     }
   }
 
-  @Get(':id/approvals')
+  @Get(":id/approvals")
   @ApiOperation({
-    summary: 'Get guardian approval history',
-    description: 'Retrieve recent approval history for a specific guardian'
+    summary: "Get guardian approval history",
+    description: "Retrieve recent approval history for a specific guardian",
   })
   @ApiParam({
-    name: 'id',
-    description: 'Guardian ID',
-    example: 'clrx1234567890guard1'
+    name: "id",
+    description: "Guardian ID",
+    example: "clrx1234567890guard1",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Guardian approval history',
+    description: "Guardian approval history",
     schema: {
       example: {
         success: true,
         data: [
           {
-            id: 'clrx1234567890appr1',
-            transactionId: 'clrx1234567890trans1',
-            amount: '5000.0000000',
-            toAddress: 'GABCD1234567890EFGH...',
-            status: 'SUCCESS',
-            txType: 'PAYMENT',
-            authMethod: 'OCRA_LIKE',
-            approvedAt: '2024-12-14T09:30:00Z'
-          }
+            id: "clrx1234567890appr1",
+            transactionId: "clrx1234567890trans1",
+            amount: "5000.0000000",
+            toAddress: "GABCD1234567890EFGH...",
+            status: "SUCCESS",
+            txType: "PAYMENT",
+            authMethod: "OCRA_LIKE",
+            approvedAt: "2024-12-14T09:30:00Z",
+          },
         ],
         metadata: {
-          guardianId: 'clrx1234567890guard1',
-          role: 'CEO',
+          guardianId: "clrx1234567890guard1",
+          role: "CEO",
           count: 20,
-          timestamp: '2024-12-14T10:30:00Z'
-        }
-      }
-    }
+          timestamp: "2024-12-14T10:30:00Z",
+        },
+      },
+    },
   })
-  async getGuardianApprovals(@Param('id') guardianId: string) {
+  async getGuardianApprovals(@Param("id") guardianId: string) {
     try {
-      const approvals = await this.guardianService.getGuardianApprovals(guardianId);
+      const approvals =
+        await this.guardianService.getGuardianApprovals(guardianId);
       const guardian = await this.guardianService.getGuardianById(guardianId);
 
       return {
         success: true,
-        data: approvals.map(approval => ({
+        data: approvals.map((approval) => ({
           id: approval.id,
           transactionId: approval.transaction.id,
           amount: approval.transaction.amount.toString(),
@@ -635,14 +643,14 @@ export class GuardianController {
           status: approval.transaction.status,
           txType: approval.transaction.txType,
           authMethod: approval.authMethod,
-          approvedAt: approval.validatedAt.toISOString()
+          approvedAt: approval.validatedAt.toISOString(),
         })),
         metadata: {
           guardianId,
           role: guardian?.role,
           count: approvals.length,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
@@ -651,14 +659,15 @@ export class GuardianController {
 
   // ==================== GUARDIAN UTILITIES ====================
 
-  @Get('check/minimum')
+  @Get("check/minimum")
   @ApiOperation({
-    summary: 'Check minimum guardian requirements',
-    description: 'Verify if system has minimum required guardians for operations'
+    summary: "Check minimum guardian requirements",
+    description:
+      "Verify if system has minimum required guardians for operations",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Minimum guardian check result',
+    description: "Minimum guardian check result",
     schema: {
       example: {
         success: true,
@@ -666,22 +675,22 @@ export class GuardianController {
           hasMinimum: true,
           activeCount: 3,
           minimumRequired: 2,
-          roles: ['CEO', 'CFO', 'CTO'],
-          systemOperational: true
-        }
-      }
-    }
+          roles: ["CEO", "CFO", "CTO"],
+          systemOperational: true,
+        },
+      },
+    },
   })
   async checkMinimumGuardians() {
     try {
       const result = await this.guardianService.hasMinimumGuardians();
-      
+
       return {
         success: true,
         data: {
           ...result,
-          systemOperational: result.hasMinimum
-        }
+          systemOperational: result.hasMinimum,
+        },
       };
     } catch (error) {
       throw error;

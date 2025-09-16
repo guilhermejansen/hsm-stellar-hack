@@ -1,12 +1,17 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
 
 /**
  * 🗄️ Database Service - Prisma Client Manager
- * 
+ *
  * Manages database connections and provides a global Prisma client
  * for all services in the Stellar Custody MVP system.
- * 
+ *
  * Features:
  * - Connection pooling
  * - Health monitoring
@@ -14,7 +19,10 @@ import { PrismaClient } from '@prisma/client';
  * - Query logging in development
  */
 @Injectable()
-export class DatabaseService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class DatabaseService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(DatabaseService.name);
 
   constructor() {
@@ -22,17 +30,18 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
       // Connection configuration
       datasources: {
         db: {
-          url: process.env.DATABASE_URL
-        }
+          url: process.env.DATABASE_URL,
+        },
       },
-      
+
       // Logging configuration
-      log: process.env.NODE_ENV === 'development' 
-        ? ['query', 'info', 'warn', 'error']
-        : ['warn', 'error'],
-      
+      log:
+        process.env.NODE_ENV === "development"
+          ? ["query", "info", "warn", "error"]
+          : ["warn", "error"],
+
       // Error formatting
-      errorFormat: 'pretty'
+      errorFormat: "pretty",
     });
   }
 
@@ -42,14 +51,13 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
   async onModuleInit() {
     try {
       await this.$connect();
-      this.logger.log('✅ Database connected successfully');
-      
+      this.logger.log("✅ Database connected successfully");
+
       // Test database connectivity
       await this.$queryRaw`SELECT 1`;
-      this.logger.log('✅ Database health check passed');
-      
+      this.logger.log("✅ Database health check passed");
     } catch (error) {
-      this.logger.error('❌ Database connection failed:', error.message);
+      this.logger.error("❌ Database connection failed:", error.message);
       throw error;
     }
   }
@@ -60,9 +68,9 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
   async onModuleDestroy() {
     try {
       await this.$disconnect();
-      this.logger.log('🔄 Database disconnected gracefully');
+      this.logger.log("🔄 Database disconnected gracefully");
     } catch (error) {
-      this.logger.error('❌ Database disconnect error:', error.message);
+      this.logger.error("❌ Database disconnect error:", error.message);
     }
   }
 
@@ -71,20 +79,20 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
    */
   async healthCheck(): Promise<{ status: string; latency: number }> {
     const startTime = Date.now();
-    
+
     try {
       await this.$queryRaw`SELECT 1`;
       const latency = Date.now() - startTime;
-      
+
       return {
-        status: 'healthy',
-        latency
+        status: "healthy",
+        latency,
       };
     } catch (error) {
-      this.logger.error('❌ Database health check failed:', error.message);
+      this.logger.error("❌ Database health check failed:", error.message);
       return {
-        status: 'unhealthy',
-        latency: Date.now() - startTime
+        status: "unhealthy",
+        latency: Date.now() - startTime,
       };
     }
   }
@@ -93,7 +101,7 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
    * Execute database operations within a transaction
    */
   async executeTransaction<T>(
-    operations: (prisma: any) => Promise<T>
+    operations: (prisma: any) => Promise<T>,
   ): Promise<T> {
     return this.$transaction(async (prisma) => {
       return operations(prisma);
@@ -110,13 +118,13 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
         guardianCount,
         walletCount,
         transactionCount,
-        pendingTransactions
+        pendingTransactions,
       ] = await Promise.all([
         this.user.count(),
         this.guardian.count({ where: { isActive: true } }),
         this.wallet.count(),
         this.transaction.count(),
-        this.transaction.count({ where: { status: 'AWAITING_APPROVAL' } })
+        this.transaction.count({ where: { status: "AWAITING_APPROVAL" } }),
       ]);
 
       return {
@@ -125,10 +133,10 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
         wallets: walletCount,
         transactions: transactionCount,
         pendingApprovals: pendingTransactions,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      this.logger.error('❌ Failed to get database stats:', error.message);
+      this.logger.error("❌ Failed to get database stats:", error.message);
       throw error;
     }
   }

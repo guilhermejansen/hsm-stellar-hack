@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { ChallengeService } from './challenge.service';
+import { Module } from "@nestjs/common";
+import { ChallengeService } from "./challenge.service";
 
 /**
  * 🎯 Challenge Module - OCRA-like Challenge-Response System
- * 
+ *
  * Features:
  * - Transaction-specific challenges
  * - TOTP + contextual secret validation
@@ -13,6 +13,6 @@ import { ChallengeService } from './challenge.service';
  */
 @Module({
   providers: [ChallengeService],
-  exports: [ChallengeService]
+  exports: [ChallengeService],
 })
 export class ChallengeModule {}

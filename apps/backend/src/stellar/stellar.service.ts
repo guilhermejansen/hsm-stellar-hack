@@ -441,7 +441,7 @@ export class StellarService implements OnModuleInit {
 
       // Compute signature hint from public key (last 4 bytes)
       const hint = Keypair.fromPublicKey(publicKey).signatureHint();
-      const decorated = new xdr.DecoratedSignature(hint, signature);
+      const decorated = new xdr.DecoratedSignature({hint, signature});
       tx.signatures.push(decorated);
       return tx.toXDR();
     } catch (error) {

@@ -1,65 +1,65 @@
-import { 
-  Controller, 
-  Get, 
-  Param, 
+import {
+  Controller,
+  Get,
+  Param,
   Query,
-  UseGuards, 
+  UseGuards,
   Request,
-  HttpStatus
-} from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
+  HttpStatus,
+} from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
   ApiBearerAuth,
   ApiParam,
-  ApiQuery
-} from '@nestjs/swagger';
+  ApiQuery,
+} from "@nestjs/swagger";
 
-import { TransactionKeyService } from './transaction-key.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { DatabaseService } from '../database/database.service';
-import { 
+import { TransactionKeyService } from "./transaction-key.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { DatabaseService } from "../database/database.service";
+import {
   EphemeralKeyStatsDto,
-  TransactionPrivacyReportDto
-} from '../common/dto/privacy.dto';
+  TransactionPrivacyReportDto,
+} from "../common/dto/privacy.dto";
 
 /**
  * 🛡️ Privacy Controller - Transaction Privacy & Ephemeral Keys
- * 
+ *
  * Following transaction-privacy.mdc complete implementation:
  * - Ephemeral transaction key monitoring
  * - Privacy protection reports
  * - Address correlation prevention tracking
  * - HSM key lifecycle monitoring
- * 
+ *
  * **Privacy Features:**
  * - Each transaction gets unique address (m/0'/0'/N')
  * - Keys "die" after use (HSM auto-destroy)
  * - Impossible to correlate transactions externally
  * - Complete transaction privacy compliance
- * 
+ *
  * **Corporate Reporting:**
  * - Privacy compliance metrics
  * - Audit-ready reports
  * - Regulatory compliance tracking
  * - Security monitoring
  */
-@ApiTags('Privacy & Ephemeral Keys')
-@Controller('privacy')
+@ApiTags("Privacy & Ephemeral Keys")
+@Controller("privacy")
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth('JWT-auth')
+@ApiBearerAuth("JWT-auth")
 export class PrivacyController {
   constructor(
     private readonly transactionKeyService: TransactionKeyService,
-    private readonly database: DatabaseService
+    private readonly database: DatabaseService,
   ) {}
 
   // ==================== EPHEMERAL KEY STATISTICS ====================
 
-  @Get('ephemeral-keys/stats')
+  @Get("ephemeral-keys/stats")
   @ApiOperation({
-    summary: 'Get ephemeral key statistics',
+    summary: "Get ephemeral key statistics",
     description: `
       **Ephemeral Transaction Key Statistics**
       
@@ -80,11 +80,11 @@ export class PrivacyController {
       - Key lifecycle audit
       - HSM efficiency tracking
       - Security dashboard metrics
-    `
+    `,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Ephemeral key statistics',
+    description: "Ephemeral key statistics",
     type: EphemeralKeyStatsDto,
     schema: {
       example: {
@@ -96,27 +96,27 @@ export class PrivacyController {
           expired: 139,
           recent24h: 8,
           usageRate: 91.03,
-          privacyScore: 89.10,
-          privacyProtection: 'EXCELLENT'
+          privacyScore: 89.1,
+          privacyProtection: "EXCELLENT",
         },
         metadata: {
-          timestamp: '2024-12-14T10:30:00Z',
-          privacyStandard: 'ENTERPRISE_GRADE'
-        }
-      }
-    }
+          timestamp: "2024-12-14T10:30:00Z",
+          privacyStandard: "ENTERPRISE_GRADE",
+        },
+      },
+    },
   })
   async getEphemeralKeyStats() {
     try {
       const stats = await this.transactionKeyService.getEphemeralKeyStats();
-      
+
       return {
         success: true,
         data: stats,
         metadata: {
           timestamp: new Date().toISOString(),
-          privacyStandard: 'ENTERPRISE_GRADE'
-        }
+          privacyStandard: "ENTERPRISE_GRADE",
+        },
       };
     } catch (error) {
       throw error;
@@ -125,9 +125,9 @@ export class PrivacyController {
 
   // ==================== PRIVACY REPORTS ====================
 
-  @Get('transactions/report')
+  @Get("transactions/report")
   @ApiOperation({
-    summary: 'Get complete transaction privacy report',
+    summary: "Get complete transaction privacy report",
     description: `
       **Complete Transaction Privacy Protection Report**
       
@@ -154,11 +154,11 @@ export class PrivacyController {
       - Security audit preparation
       - Regulatory compliance verification
       - Executive privacy briefings
-    `
+    `,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Complete transaction privacy report',
+    description: "Complete transaction privacy report",
     type: TransactionPrivacyReportDto,
     schema: {
       example: {
@@ -169,49 +169,50 @@ export class PrivacyController {
             ephemeralTransactions: 243,
             uniqueAddressesGenerated: 243,
             privacyCompliance: 98.38,
-            correlationRisk: 'LOW'
+            correlationRisk: "LOW",
           },
           privacy: {
             addressReuse: 4,
             correlationPrevention: 243,
             privacyBenefits: [
-              'External observers cannot correlate transactions',
-              'Each transaction appears from random address',
-              'Wallet balances cannot be traced',
-              'Transaction patterns are hidden',
-              'Complete financial privacy protection'
-            ]
+              "External observers cannot correlate transactions",
+              "Each transaction appears from random address",
+              "Wallet balances cannot be traced",
+              "Transaction patterns are hidden",
+              "Complete financial privacy protection",
+            ],
           },
           recommendations: [
-            '✅ Excellent privacy protection maintained',
-            '🎯 All transactions using ephemeral keys',
-            '🛡️ Complete correlation prevention active'
-          ]
+            "✅ Excellent privacy protection maintained",
+            "🎯 All transactions using ephemeral keys",
+            "🛡️ Complete correlation prevention active",
+          ],
         },
         metadata: {
-          timestamp: '2024-12-14T10:30:00Z',
-          privacyStandard: 'ENTERPRISE_GRADE',
-          complianceLevel: 'EXCELLENT'
-        }
-      }
-    }
+          timestamp: "2024-12-14T10:30:00Z",
+          privacyStandard: "ENTERPRISE_GRADE",
+          complianceLevel: "EXCELLENT",
+        },
+      },
+    },
   })
   async getTransactionPrivacyReport(@Request() req: any) {
     try {
       // Simple privacy report using database only
       const [totalTransactions, ephemeralTransactions] = await Promise.all([
         this.database.transaction.count({ where: { userId: req.user.userId } }),
-        this.database.transaction.count({ 
-          where: { 
+        this.database.transaction.count({
+          where: {
             userId: req.user.userId,
-            TransactionKey: { isNot: null }
-          }
-        })
+            TransactionKey: { isNot: null },
+          },
+        }),
       ]);
 
-      const privacyCompliance = totalTransactions > 0 
-        ? (ephemeralTransactions / totalTransactions) * 100 
-        : 100;
+      const privacyCompliance =
+        totalTransactions > 0
+          ? (ephemeralTransactions / totalTransactions) * 100
+          : 100;
 
       const privacyReport = {
         summary: {
@@ -219,40 +220,51 @@ export class PrivacyController {
           ephemeralTransactions,
           uniqueAddressesGenerated: ephemeralTransactions,
           privacyCompliance: Math.round(privacyCompliance * 100) / 100,
-          correlationRisk: privacyCompliance > 95 ? 'LOW' as const : 
-                          privacyCompliance > 80 ? 'MEDIUM' as const : 'HIGH' as const
+          correlationRisk:
+            privacyCompliance > 95
+              ? ("LOW" as const)
+              : privacyCompliance > 80
+                ? ("MEDIUM" as const)
+                : ("HIGH" as const),
         },
         privacy: {
           addressReuse: totalTransactions - ephemeralTransactions,
           correlationPrevention: ephemeralTransactions,
           privacyBenefits: [
-            'External observers cannot correlate transactions',
-            'Each transaction appears from random address',
-            'Wallet balances cannot be traced',
-            'Transaction patterns are hidden',
-            'Complete financial privacy protection'
-          ]
+            "External observers cannot correlate transactions",
+            "Each transaction appears from random address",
+            "Wallet balances cannot be traced",
+            "Transaction patterns are hidden",
+            "Complete financial privacy protection",
+          ],
         },
-        recommendations: privacyCompliance > 95 ? [
-          '✅ Excellent privacy protection maintained',
-          '🎯 All transactions using ephemeral keys',
-          '🛡️ Complete correlation prevention active'
-        ] : [
-          '🔧 Ensure all transactions use ephemeral keys',
-          '🔍 Monitor ephemeral key generation',
-          '⏰ Verify key expiry and destruction'
-        ]
+        recommendations:
+          privacyCompliance > 95
+            ? [
+                "✅ Excellent privacy protection maintained",
+                "🎯 All transactions using ephemeral keys",
+                "🛡️ Complete correlation prevention active",
+              ]
+            : [
+                "🔧 Ensure all transactions use ephemeral keys",
+                "🔍 Monitor ephemeral key generation",
+                "⏰ Verify key expiry and destruction",
+              ],
       };
-      
+
       return {
         success: true,
         data: privacyReport,
         metadata: {
           timestamp: new Date().toISOString(),
-          privacyStandard: 'ENTERPRISE_GRADE',
-          complianceLevel: privacyReport.summary.correlationRisk === 'LOW' ? 'EXCELLENT' : 
-                          privacyReport.summary.correlationRisk === 'MEDIUM' ? 'GOOD' : 'NEEDS_IMPROVEMENT'
-        }
+          privacyStandard: "ENTERPRISE_GRADE",
+          complianceLevel:
+            privacyReport.summary.correlationRisk === "LOW"
+              ? "EXCELLENT"
+              : privacyReport.summary.correlationRisk === "MEDIUM"
+                ? "GOOD"
+                : "NEEDS_IMPROVEMENT",
+        },
       };
     } catch (error) {
       throw error;
@@ -261,9 +273,9 @@ export class PrivacyController {
 
   // ==================== EPHEMERAL KEY DETAILS ====================
 
-  @Get('ephemeral-keys/:transactionId')
+  @Get("ephemeral-keys/:transactionId")
   @ApiOperation({
-    summary: 'Get ephemeral key details for transaction',
+    summary: "Get ephemeral key details for transaction",
     description: `
       **Ephemeral Transaction Key Details**
       
@@ -283,54 +295,56 @@ export class PrivacyController {
       - Address uniqueness confirmation
       - Correlation prevention status
       - Traceability impossibility
-    `
+    `,
   })
   @ApiParam({
-    name: 'transactionId',
-    description: 'Transaction ID',
-    example: 'clrx1234567890trans1'
+    name: "transactionId",
+    description: "Transaction ID",
+    example: "clrx1234567890trans1",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Ephemeral key details',
+    description: "Ephemeral key details",
     schema: {
       example: {
         success: true,
         data: {
-          transactionKeyId: 'clrx1234567890ephkey1',
-          ephemeralAddress: 'GXYZ9876543210ABCDEFGHIJKLMNOPQRSTUVWXYZ9876543210ABCD',
+          transactionKeyId: "clrx1234567890ephkey1",
+          ephemeralAddress:
+            "GXYZ9876543210ABCDEFGHIJKLMNOPQRSTUVWXYZ9876543210ABCD",
           derivationPath: "m/0'/0'/42'",
           transactionIndex: 42,
           lifecycle: {
             isActive: false,
             isUsed: true,
             isExpired: true,
-            createdAt: '2024-12-14T10:20:00Z',
-            usedAt: '2024-12-14T10:30:00Z',
-            destroyedAt: '2024-12-14T10:30:15Z',
-            expiresAt: '2024-12-14T11:20:00Z'
+            createdAt: "2024-12-14T10:20:00Z",
+            usedAt: "2024-12-14T10:30:00Z",
+            destroyedAt: "2024-12-14T10:30:15Z",
+            expiresAt: "2024-12-14T11:20:00Z",
           },
           hsm: {
-            keyId: 'ephemeral_tx_42_abc123def456',
-            partitionId: 'user_ceo_partition_001',
-            keyDestroyed: true
+            keyId: "ephemeral_tx_42_abc123def456",
+            partitionId: "user_ceo_partition_001",
+            keyDestroyed: true,
           },
           privacy: {
             correlationPrevented: true,
             addressUnique: true,
             traceabilityImpossible: true,
-            privacyScore: 100
-          }
-        }
-      }
-    }
+            privacyScore: 100,
+          },
+        },
+      },
+    },
   })
-  async getEphemeralKeyDetails(@Param('transactionId') transactionId: string) {
+  async getEphemeralKeyDetails(@Param("transactionId") transactionId: string) {
     try {
-      const transactionKey = await this.transactionKeyService.getTransactionKey(transactionId);
-      
+      const transactionKey =
+        await this.transactionKeyService.getTransactionKey(transactionId);
+
       if (!transactionKey) {
-        throw new Error('Ephemeral transaction key not found');
+        throw new Error("Ephemeral transaction key not found");
       }
 
       return {
@@ -347,27 +361,31 @@ export class PrivacyController {
             createdAt: transactionKey.createdAt.toISOString(),
             usedAt: transactionKey.usedAt?.toISOString(),
             destroyedAt: transactionKey.destroyedAt?.toISOString(),
-            expiresAt: transactionKey.expiresAt.toISOString()
+            expiresAt: transactionKey.expiresAt.toISOString(),
           },
           hsm: {
             keyId: transactionKey.hsmKeyId,
             partitionId: transactionKey.parentWallet.hsmPartitionId,
-            keyDestroyed: !!transactionKey.destroyedAt
+            keyDestroyed: !!transactionKey.destroyedAt,
           },
           privacy: {
             correlationPrevented: true,
             addressUnique: true,
             traceabilityImpossible: true,
-            privacyScore: transactionKey.isUsed && transactionKey.destroyedAt ? 100 : 
-                         transactionKey.isExpired ? 80 : 60
+            privacyScore:
+              transactionKey.isUsed && transactionKey.destroyedAt
+                ? 100
+                : transactionKey.isExpired
+                  ? 80
+                  : 60,
           },
           transaction: {
             id: transactionKey.transaction.id,
             amount: transactionKey.transaction.amount.toString(),
             toAddress: transactionKey.transaction.toAddress,
-            status: transactionKey.transaction.status
-          }
-        }
+            status: transactionKey.transaction.status,
+          },
+        },
       };
     } catch (error) {
       throw error;
@@ -376,9 +394,9 @@ export class PrivacyController {
 
   // ==================== PRIVACY VERIFICATION ====================
 
-  @Get('verification/:userId')
+  @Get("verification/:userId")
   @ApiOperation({
-    summary: 'Verify transaction privacy for user',
+    summary: "Verify transaction privacy for user",
     description: `
       **User-Specific Privacy Verification**
       
@@ -393,28 +411,29 @@ export class PrivacyController {
       - Privacy compliance percentage
       - Address reuse detection
       - Improvement recommendations
-    `
+    `,
   })
   @ApiParam({
-    name: 'userId',
-    description: 'User ID to verify privacy for',
-    example: 'clrx1234567890user01'
+    name: "userId",
+    description: "User ID to verify privacy for",
+    example: "clrx1234567890user01",
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Privacy verification result'
+    description: "Privacy verification result",
   })
-  async verifyUserPrivacy(@Param('userId') userId: string) {
+  async verifyUserPrivacy(@Param("userId") userId: string) {
     try {
-      const verification = await this.transactionKeyService.verifyTransactionPrivacy(userId);
-      
+      const verification =
+        await this.transactionKeyService.verifyTransactionPrivacy(userId);
+
       return {
         success: true,
         data: verification,
         metadata: {
           timestamp: new Date().toISOString(),
-          privacyStandard: 'ENTERPRISE_GRADE'
-        }
+          privacyStandard: "ENTERPRISE_GRADE",
+        },
       };
     } catch (error) {
       throw error;

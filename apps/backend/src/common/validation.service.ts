@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { StrKey } from '@stellar/stellar-sdk';
+import { Injectable, Logger } from "@nestjs/common";
+import { StrKey } from "@stellar/stellar-sdk";
 
 /**
  * ✅ Validation Service - Input validation and security checks
- * 
+ *
  * Following security-practices.mdc validation requirements
  */
 @Injectable()
@@ -38,22 +38,22 @@ export class ValidationService {
   isValidAmount(amount: string, maxAmount?: number): boolean {
     try {
       const numAmount = parseFloat(amount);
-      
+
       // Check format (max 7 decimal places)
       if (!/^\d+(\.\d{1,7})?$/.test(amount)) {
         return false;
       }
-      
+
       // Check positive
       if (numAmount <= 0) {
         return false;
       }
-      
+
       // Check maximum if provided
       if (maxAmount && numAmount > maxAmount) {
         return false;
       }
-      
+
       return true;
     } catch {
       return false;
@@ -85,7 +85,7 @@ export class ValidationService {
    * Sanitize input for security
    */
   sanitizeInput(input: string): string {
-    return input.replace(/[^\w\s@.-]/g, '').trim();
+    return input.replace(/[^\w\s@.-]/g, "").trim();
   }
 
   /**

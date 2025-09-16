@@ -1,21 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Decimal } from '@prisma/client/runtime/library';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Decimal } from "@prisma/client/runtime/library";
 
-import { DatabaseService } from '../database/database.service';
-import { HSMService } from '../hsm/hsm.service';
-import { AuditService } from '../common/audit.service';
-import { WalletHierarchy, WalletCreationRequest } from '../common/interfaces';
+import { DatabaseService } from "../database/database.service";
+import { HSMService } from "../hsm/hsm.service";
+import { AuditService } from "../common/audit.service";
+import { WalletHierarchy, WalletCreationRequest } from "../common/interfaces";
 
 /**
  * 💰 Wallet Service - BIP32 HD Wallet Management
- * 
+ *
  * Following api-integrations.mdc wallet hierarchy:
  * - Cold Wallet (Master): m/0' - 95% of funds
  * - Hot Wallet (Derived): m/0'/0' - 5% of funds, derived from Cold
  * - HSM protection for all keys
  * - Automatic rebalancing between wallets
- * 
+ *
  * Security:
  * - Cold wallet requires TOTP for all transactions
  * - Hot wallet for operational transactions (< 1000 XLM)
@@ -29,7 +29,7 @@ export class WalletService {
     private readonly database: DatabaseService,
     private readonly hsmService: HSMService,
     private readonly auditService: AuditService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
   ) {}
 
   // ==================== WALLET CREATION ====================
@@ -40,28 +40,28 @@ export class WalletService {
    */
   async createWalletHierarchy(userId: string): Promise<WalletHierarchy> {
     const startTime = Date.now();
-    
+
     try {
       this.logger.log(`🌳 Creating wallet hierarchy for user: ${userId}`);
 
       // Get user with HSM partition info
       const user = await this.database.user.findUnique({
-        where: { id: userId }
+        where: { id: userId },
       });
 
       if (!user || !user.hsmPartitionId || !user.hsmKeyName) {
-        throw new Error('User HSM partition not found or not activated');
+        throw new Error("User HSM partition not found or not activated");
       }
 
-      if (user.kycStatus !== 'APPROVED') {
-        throw new Error('KYC must be approved before creating wallets');
+      if (user.kycStatus !== "APPROVED") {
+        throw new Error("KYC must be approved before creating wallets");
       }
 
       // Create wallet hierarchy using HSM
       const walletHierarchy = await this.hsmService.createWalletHierarchy(
         userId,
         user.hsmPartitionId,
-        user.hsmKeyName
+        user.hsmKeyName,
       );
 
       // Create Cold Wallet (Master) in database
@@ -70,7 +70,7 @@ export class WalletService {
           userId: userId,
           publicKey: walletHierarchy.coldWallet.address,
           derivationPath: walletHierarchy.coldWallet.derivationPath,
-          walletType: 'COLD',
+          walletType: "COLD",
           balance: new Decimal(0),
           reservedBalance: new Decimal(0),
           maxBalance: null, // No limit for cold wallet
@@ -78,8 +78,8 @@ export class WalletService {
           hsmPartitionId: walletHierarchy.coldWallet.hsmPartitionId,
           isHSMProtected: true,
           requiresTOTP: true, // Cold wallet always requires TOTP
-          parentWalletId: null // Cold is the master
-        }
+          parentWalletId: null, // Cold is the master
+        },
       });
 
       // Create Hot Wallet (Derived from Cold) in database
@@ -88,7 +88,7 @@ export class WalletService {
           userId: userId,
           publicKey: walletHierarchy.hotWallet.address,
           derivationPath: walletHierarchy.hotWallet.derivationPath,
-          walletType: 'HOT',
+          walletType: "HOT",
           balance: new Decimal(0),
           reservedBalance: new Decimal(0),
           maxBalance: new Decimal(0), // Will be set based on total balance
@@ -96,16 +96,16 @@ export class WalletService {
           hsmPartitionId: walletHierarchy.hotWallet.hsmPartitionId,
           isHSMProtected: true,
           requiresTOTP: false, // Hot wallet for operational use
-          parentWalletId: coldWallet.id // Hot is derived from Cold
-        }
+          parentWalletId: coldWallet.id, // Hot is derived from Cold
+        },
       });
 
       // Update user with Stellar public key (Cold wallet address)
       await this.database.user.update({
         where: { id: userId },
         data: {
-          stellarPublicKey: coldWallet.publicKey
-        }
+          stellarPublicKey: coldWallet.publicKey,
+        },
       });
 
       const result: WalletHierarchy = {
@@ -113,56 +113,57 @@ export class WalletService {
           id: coldWallet.id,
           address: coldWallet.publicKey,
           derivationPath: coldWallet.derivationPath,
-          balance: '0.0000000',
-          percentage: 95
+          balance: "0.0000000",
+          percentage: 95,
         },
         hotWallet: {
           id: hotWallet.id,
           address: hotWallet.publicKey,
           derivationPath: hotWallet.derivationPath,
-          balance: '0.0000000',
+          balance: "0.0000000",
           percentage: 5,
-          parentWalletId: coldWallet.id
-        }
+          parentWalletId: coldWallet.id,
+        },
       };
 
       // Audit log
       await this.auditService.logEvent({
         timestamp: new Date(),
         userId: userId,
-        action: 'wallet.hierarchy_created',
-        resource: 'wallet',
-        ip: 'backend-service',
-        userAgent: 'wallet-service',
-        result: 'success',
+        action: "wallet.hierarchy_created",
+        resource: "wallet",
+        ip: "backend-service",
+        userAgent: "wallet-service",
+        result: "success",
         metadata: {
           coldWalletId: coldWallet.id,
           hotWalletId: hotWallet.id,
           coldAddress: coldWallet.publicKey,
           hotAddress: hotWallet.publicKey,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       });
 
-      this.logger.log(`✅ Wallet hierarchy created - Cold: ${coldWallet.publicKey}, Hot: ${hotWallet.publicKey}`);
+      this.logger.log(
+        `✅ Wallet hierarchy created - Cold: ${coldWallet.publicKey}, Hot: ${hotWallet.publicKey}`,
+      );
       return result;
-
     } catch (error) {
       await this.auditService.logEvent({
         timestamp: new Date(),
         userId: userId,
-        action: 'wallet.hierarchy_creation_failed',
-        resource: 'wallet',
-        ip: 'backend-service',
-        userAgent: 'wallet-service',
-        result: 'failure',
-        metadata: { 
+        action: "wallet.hierarchy_creation_failed",
+        resource: "wallet",
+        ip: "backend-service",
+        userAgent: "wallet-service",
+        result: "failure",
+        metadata: {
           error: error.message,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       });
-      
-      this.logger.error('❌ Wallet hierarchy creation failed:', error.message);
+
+      this.logger.error("❌ Wallet hierarchy creation failed:", error.message);
       throw error;
     }
   }
@@ -177,21 +178,21 @@ export class WalletService {
       const wallet = await this.database.wallet.findFirst({
         where: {
           userId: userId,
-          walletType: 'COLD'
+          walletType: "COLD",
         },
         include: {
           childWallets: true,
-          user: true
-        }
+          user: true,
+        },
       });
 
       if (!wallet) {
-        throw new Error('Cold wallet not found');
+        throw new Error("Cold wallet not found");
       }
 
       return wallet;
     } catch (error) {
-      this.logger.error('❌ Failed to get cold wallet:', error.message);
+      this.logger.error("❌ Failed to get cold wallet:", error.message);
       throw error;
     }
   }
@@ -204,21 +205,21 @@ export class WalletService {
       const wallet = await this.database.wallet.findFirst({
         where: {
           userId: userId,
-          walletType: 'HOT'
+          walletType: "HOT",
         },
         include: {
           parentWallet: true,
-          user: true
-        }
+          user: true,
+        },
       });
 
       if (!wallet) {
-        throw new Error('Hot wallet not found');
+        throw new Error("Hot wallet not found");
       }
 
       return wallet;
     } catch (error) {
-      this.logger.error('❌ Failed to get hot wallet:', error.message);
+      this.logger.error("❌ Failed to get hot wallet:", error.message);
       throw error;
     }
   }
@@ -230,15 +231,15 @@ export class WalletService {
     try {
       const [coldWallet, hotWallet] = await Promise.all([
         this.getColdWallet(userId),
-        this.getHotWallet(userId)
+        this.getHotWallet(userId),
       ]);
 
       const totalBalance = coldWallet.balance.plus(hotWallet.balance);
-      const coldPercentage = totalBalance.gt(0) 
+      const coldPercentage = totalBalance.gt(0)
         ? coldWallet.balance.div(totalBalance).mul(100).toNumber()
         : 0;
       const hotPercentage = totalBalance.gt(0)
-        ? hotWallet.balance.div(totalBalance).mul(100).toNumber() 
+        ? hotWallet.balance.div(totalBalance).mul(100).toNumber()
         : 0;
 
       return {
@@ -247,19 +248,19 @@ export class WalletService {
           balance: coldWallet.balance.toString(),
           percentage: coldPercentage,
           address: coldWallet.publicKey,
-          derivationPath: coldWallet.derivationPath
+          derivationPath: coldWallet.derivationPath,
         },
         hot: {
           balance: hotWallet.balance.toString(),
           percentage: hotPercentage,
           address: hotWallet.publicKey,
           derivationPath: hotWallet.derivationPath,
-          parentAddress: coldWallet.publicKey
+          parentAddress: coldWallet.publicKey,
         },
-        needsRebalancing: Math.abs(hotPercentage - 5) > 2 // Alert if hot wallet > 7% or < 3%
+        needsRebalancing: Math.abs(hotPercentage - 5) > 2, // Alert if hot wallet > 7% or < 3%
       };
     } catch (error) {
-      this.logger.error('❌ Failed to get wallet balances:', error.message);
+      this.logger.error("❌ Failed to get wallet balances:", error.message);
       throw error;
     }
   }
@@ -269,24 +270,27 @@ export class WalletService {
   /**
    * Rebalance wallets to maintain 95% Cold / 5% Hot ratio
    */
-  async rebalanceWallets(userId: string, guardianId: string): Promise<{
+  async rebalanceWallets(
+    userId: string,
+    guardianId: string,
+  ): Promise<{
     success: boolean;
     amountMoved: string;
-    direction: 'HOT_TO_COLD' | 'COLD_TO_HOT';
+    direction: "HOT_TO_COLD" | "COLD_TO_HOT";
     newBalances: any;
   }> {
     try {
       this.logger.log(`⚖️ Rebalancing wallets for user: ${userId}`);
 
       const balances = await this.getWalletBalances(userId);
-      
+
       if (!balances.needsRebalancing) {
-        this.logger.log('✅ Wallets already balanced, no action needed');
+        this.logger.log("✅ Wallets already balanced, no action needed");
         return {
           success: true,
-          amountMoved: '0.0000000',
-          direction: 'HOT_TO_COLD',
-          newBalances: balances
+          amountMoved: "0.0000000",
+          direction: "HOT_TO_COLD",
+          newBalances: balances,
         };
       }
 
@@ -295,38 +299,40 @@ export class WalletService {
       const currentHotBalance = new Decimal(balances.hot.balance);
       const difference = currentHotBalance.minus(targetHotBalance);
 
-      let direction: 'HOT_TO_COLD' | 'COLD_TO_HOT';
+      let direction: "HOT_TO_COLD" | "COLD_TO_HOT";
       let amountToMove: Decimal;
 
       if (difference.gt(0)) {
         // Hot wallet has too much, move to cold
-        direction = 'HOT_TO_COLD';
+        direction = "HOT_TO_COLD";
         amountToMove = difference;
       } else {
         // Hot wallet has too little, move from cold
-        direction = 'COLD_TO_HOT';
+        direction = "COLD_TO_HOT";
         amountToMove = difference.abs();
       }
 
       // Create rebalance transaction (this would be handled by TransactionService)
       // For now, just log the intended operation
-      this.logger.log(`💱 Rebalance needed: ${direction} - ${amountToMove.toString()} XLM`);
+      this.logger.log(
+        `💱 Rebalance needed: ${direction} - ${amountToMove.toString()} XLM`,
+      );
 
       // Audit log
       await this.auditService.logEvent({
         timestamp: new Date(),
         userId: guardianId,
-        action: 'wallet.rebalance',
-        resource: 'wallet',
-        ip: 'backend-service',
-        userAgent: 'wallet-service',
-        result: 'success',
+        action: "wallet.rebalance",
+        resource: "wallet",
+        ip: "backend-service",
+        userAgent: "wallet-service",
+        result: "success",
         metadata: {
           userId,
           direction,
           amount: amountToMove.toString(),
-          balancesBefore: balances
-        }
+          balancesBefore: balances,
+        },
       });
 
       // Get updated balances after rebalancing
@@ -336,11 +342,10 @@ export class WalletService {
         success: true,
         amountMoved: amountToMove.toString(),
         direction,
-        newBalances
+        newBalances,
       };
-
     } catch (error) {
-      this.logger.error('❌ Wallet rebalancing failed:', error.message);
+      this.logger.error("❌ Wallet rebalancing failed:", error.message);
       throw error;
     }
   }
@@ -351,12 +356,12 @@ export class WalletService {
   async updateWalletBalance(
     walletId: string,
     newBalance: string,
-    reservedChange?: string
+    reservedChange?: string,
   ): Promise<void> {
     try {
       const updateData: any = {
         balance: new Decimal(newBalance),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       if (reservedChange) {
@@ -365,12 +370,14 @@ export class WalletService {
 
       await this.database.wallet.update({
         where: { id: walletId },
-        data: updateData
+        data: updateData,
       });
 
-      this.logger.log(`✅ Wallet balance updated: ${walletId} -> ${newBalance} XLM`);
+      this.logger.log(
+        `✅ Wallet balance updated: ${walletId} -> ${newBalance} XLM`,
+      );
     } catch (error) {
-      this.logger.error('❌ Failed to update wallet balance:', error.message);
+      this.logger.error("❌ Failed to update wallet balance:", error.message);
       throw error;
     }
   }
@@ -378,18 +385,25 @@ export class WalletService {
   /**
    * Check if wallet can send amount
    */
-  async canSendAmount(walletId: string, amount: string): Promise<{
+  async canSendAmount(
+    walletId: string,
+    amount: string,
+  ): Promise<{
     canSend: boolean;
     availableBalance: string;
     reason?: string;
   }> {
     try {
       const wallet = await this.database.wallet.findUnique({
-        where: { id: walletId }
+        where: { id: walletId },
       });
 
       if (!wallet) {
-        return { canSend: false, availableBalance: '0', reason: 'Wallet not found' };
+        return {
+          canSend: false,
+          availableBalance: "0",
+          reason: "Wallet not found",
+        };
       }
 
       const requestedAmount = new Decimal(amount);
@@ -399,17 +413,21 @@ export class WalletService {
         return {
           canSend: false,
           availableBalance: availableBalance.toString(),
-          reason: 'Insufficient available balance'
+          reason: "Insufficient available balance",
         };
       }
 
       return {
         canSend: true,
-        availableBalance: availableBalance.toString()
+        availableBalance: availableBalance.toString(),
       };
     } catch (error) {
-      this.logger.error('❌ Failed to check wallet balance:', error.message);
-      return { canSend: false, availableBalance: '0', reason: 'Balance check failed' };
+      this.logger.error("❌ Failed to check wallet balance:", error.message);
+      return {
+        canSend: false,
+        availableBalance: "0",
+        reason: "Balance check failed",
+      };
     }
   }
 
@@ -419,11 +437,11 @@ export class WalletService {
   async reserveBalance(walletId: string, amount: string): Promise<void> {
     try {
       const wallet = await this.database.wallet.findUnique({
-        where: { id: walletId }
+        where: { id: walletId },
       });
 
       if (!wallet) {
-        throw new Error('Wallet not found');
+        throw new Error("Wallet not found");
       }
 
       const reserveAmount = new Decimal(amount);
@@ -432,13 +450,13 @@ export class WalletService {
       await this.database.wallet.update({
         where: { id: walletId },
         data: {
-          reservedBalance: newReservedBalance
-        }
+          reservedBalance: newReservedBalance,
+        },
       });
 
       this.logger.log(`✅ Reserved ${amount} XLM in wallet: ${walletId}`);
     } catch (error) {
-      this.logger.error('❌ Failed to reserve balance:', error.message);
+      this.logger.error("❌ Failed to reserve balance:", error.message);
       throw error;
     }
   }
@@ -446,32 +464,40 @@ export class WalletService {
   /**
    * Release reserved balance
    */
-  async releaseReservedBalance(walletId: string, amount: string): Promise<void> {
+  async releaseReservedBalance(
+    walletId: string,
+    amount: string,
+  ): Promise<void> {
     try {
       const wallet = await this.database.wallet.findUnique({
-        where: { id: walletId }
+        where: { id: walletId },
       });
 
       if (!wallet) {
-        throw new Error('Wallet not found');
+        throw new Error("Wallet not found");
       }
 
       const releaseAmount = new Decimal(amount);
       const newReservedBalance = wallet.reservedBalance.minus(releaseAmount);
 
       // Ensure reserved balance doesn't go negative
-      const finalReservedBalance = newReservedBalance.lt(0) ? new Decimal(0) : newReservedBalance;
+      const finalReservedBalance = newReservedBalance.lt(0)
+        ? new Decimal(0)
+        : newReservedBalance;
 
       await this.database.wallet.update({
         where: { id: walletId },
         data: {
-          reservedBalance: finalReservedBalance
-        }
+          reservedBalance: finalReservedBalance,
+        },
       });
 
       this.logger.log(`✅ Released ${amount} XLM from wallet: ${walletId}`);
     } catch (error) {
-      this.logger.error('❌ Failed to release reserved balance:', error.message);
+      this.logger.error(
+        "❌ Failed to release reserved balance:",
+        error.message,
+      );
       throw error;
     }
   }
@@ -491,16 +517,16 @@ export class WalletService {
               id: true,
               name: true,
               email: true,
-              hsmPartitionId: true
-            }
+              hsmPartitionId: true,
+            },
           },
           parentWallet: {
             select: {
               id: true,
               publicKey: true,
               walletType: true,
-              derivationPath: true
-            }
+              derivationPath: true,
+            },
           },
           childWallets: {
             select: {
@@ -508,13 +534,13 @@ export class WalletService {
               publicKey: true,
               walletType: true,
               derivationPath: true,
-              balance: true
-            }
-          }
-        }
+              balance: true,
+            },
+          },
+        },
       });
     } catch (error) {
-      this.logger.error('❌ Failed to get wallet:', error.message);
+      this.logger.error("❌ Failed to get wallet:", error.message);
       throw error;
     }
   }
@@ -528,14 +554,14 @@ export class WalletService {
         where: { userId },
         include: {
           parentWallet: true,
-          childWallets: true
+          childWallets: true,
         },
         orderBy: {
-          walletType: 'desc' // COLD first, then HOT
-        }
+          walletType: "desc", // COLD first, then HOT
+        },
       });
     } catch (error) {
-      this.logger.error('❌ Failed to get user wallets:', error.message);
+      this.logger.error("❌ Failed to get user wallets:", error.message);
       throw error;
     }
   }
@@ -550,27 +576,28 @@ export class WalletService {
         coldWallets,
         hotWallets,
         totalBalance,
-        hsmProtectedWallets
+        hsmProtectedWallets,
       ] = await Promise.all([
         this.database.wallet.count(),
-        this.database.wallet.count({ where: { walletType: 'COLD' } }),
-        this.database.wallet.count({ where: { walletType: 'HOT' } }),
+        this.database.wallet.count({ where: { walletType: "COLD" } }),
+        this.database.wallet.count({ where: { walletType: "HOT" } }),
         this.database.wallet.aggregate({
-          _sum: { balance: true }
+          _sum: { balance: true },
         }),
-        this.database.wallet.count({ where: { isHSMProtected: true } })
+        this.database.wallet.count({ where: { isHSMProtected: true } }),
       ]);
 
       return {
         total: totalWallets,
         cold: coldWallets,
         hot: hotWallets,
-        totalBalance: totalBalance._sum.balance?.toString() || '0',
+        totalBalance: totalBalance._sum.balance?.toString() || "0",
         hsmProtected: hsmProtectedWallets,
-        hsmProtectionPercentage: totalWallets > 0 ? (hsmProtectedWallets / totalWallets) * 100 : 0
+        hsmProtectionPercentage:
+          totalWallets > 0 ? (hsmProtectedWallets / totalWallets) * 100 : 0,
       };
     } catch (error) {
-      this.logger.error('❌ Failed to get wallet stats:', error.message);
+      this.logger.error("❌ Failed to get wallet stats:", error.message);
       throw error;
     }
   }
