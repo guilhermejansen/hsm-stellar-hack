@@ -465,32 +465,12 @@ export default function CreateTransactionPage() {
               </CardContent>
             </Card>
           )}
-
-          {/* Form Validation Debug */}
-          {process.env.NODE_ENV === 'development' && (
-            <Card className="corporate-card bg-yellow-50 dark:bg-yellow-900/20">
-              <CardHeader>
-                <CardTitle className="text-yellow-800 dark:text-yellow-200">🔍 Form Debug (Development)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div><strong>Form Valid:</strong> {form.formState.isValid ? '✅ Yes' : '❌ No'}</div>
-                  <div><strong>Is Dirty:</strong> {form.formState.isDirty ? '✅ Yes' : '❌ No'}</div>
-                  <div><strong>Is Submitting:</strong> {form.formState.isSubmitting ? '✅ Yes' : '❌ No'}</div>
-                  <div><strong>Errors:</strong> {Object.keys(form.formState.errors).length > 0 ? '❌ ' + Object.keys(form.formState.errors).join(', ') : '✅ None'}</div>
-                  <div><strong>Available Wallets:</strong> {availableWallets.length}</div>
-                  <div><strong>Selected Wallet:</strong> {watchFromWalletId || 'None'}</div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Submit Button */}
           <div className="flex items-center justify-end space-x-4">
             <Link href="/dashboard/transactions">
               <Button variant="outline">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Cancel
+                Cancel 
               </Button>
             </Link>
             

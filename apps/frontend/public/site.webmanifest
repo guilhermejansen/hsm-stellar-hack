@@ -1,0 +1,49 @@
+{
+  "name": "Stellar Custody MVP",
+  "short_name": "StellarCustody",
+  "description": "Multi-Signature Custody System for Stellar blockchain with HSM protection and 3-Guardian approval system",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#1a1a1a",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "start_url": "/dashboard",
+  "categories": ["finance", "security", "blockchain"],
+  "lang": "en-US",
+  "screenshots": [
+    {
+      "src": "/stellar-coin.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Stellar Custody Dashboard"
+    }
+  ]
+}

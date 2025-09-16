@@ -281,10 +281,14 @@ export class WalletController {
   })
   async getWalletBalances(@Request() req: any) {
     try {
+      this.logger.log(`🔍 Getting wallet balances for user: ${req.user.userId}`);
+      
       const balances = await this.walletService.getWalletBalances(
         req.user.userId,
       );
 
+      this.logger.log(`✅ Wallet balances retrieved successfully for user: ${req.user.userId}`);
+      
       return {
         success: true,
         data: balances,
@@ -294,7 +298,16 @@ export class WalletController {
         },
       };
     } catch (error) {
-      throw error;
+      this.logger.error(`❌ Failed to get wallet balances for user ${req.user.userId}:`, error.message);
+      this.logger.error('Error stack:', error.stack);
+      
+      return {
+        success: false,
+        error: 'Failed to retrieve wallet balances',
+        message: error.message,
+        userId: req.user.userId,
+        timestamp: new Date().toISOString(),
+      };
     }
   }
 

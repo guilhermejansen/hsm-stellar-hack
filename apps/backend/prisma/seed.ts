@@ -329,55 +329,105 @@ async function main() {
       console.log(`📱 Guardian TOTP Secret: ${ctoTotpSecret}`);
     }
 
-    // ==================== CREATE WALLETS ====================
-    console.log('💰 Creating wallet hierarchy...');
+    // ==================== CREATE WALLETS FOR ALL USERS ====================
+    console.log('💰 Creating wallet hierarchy for all users...');
 
-    // Check if wallets already exist
-    const existingHotWallet = await prisma.wallet.findFirst({
-      where: { walletType: 'HOT' }
-    });
+    // Wallet configurations for all users (unique valid Stellar addresses)
+    const walletConfigs = [
+      {
+        user: existingAdmin || {
+          id: (await prisma.user.findUnique({ where: { email: adminEmail } }))?.id,
+          name: 'Administrator',
+          hsmPartitionId: 'admin_partition_001'
+        },
+        coldAddress: 'GCVPYOTR4K2KYNXFC4OFRE2ZVC3CZIRUEIIXUJ7FDNZECZ4VYAVZURKI',
+        hotAddress: 'GCMFYTMZJPDS2ECNYBU5XZ4KE5GHMPX7LYOWQII4TC4XRBO5WSAJDPFM',
+        coldBalance: 100000,
+        hotBalance: 5000,
+        prefix: 'admin'
+      },
+      {
+        user: ceoUser,
+        coldAddress: 'GAK2TU742A57ERQWNAZ5YEJJAUJUBUNWX2C6BYLIF2ZRVRYFR43ATJDT',
+        hotAddress: 'GBUQWP3BOUZX5TCRQWAHCPHOBVIXMJZPYUKDCW3VXLB6LLXQTGWJFM4X',
+        coldBalance: 200000,
+        hotBalance: 10000,
+        prefix: 'ceo'
+      },
+      {
+        user: cfoUser,
+        coldAddress: 'GAODJIFVVHOGTISA2JYI4HQLIDAXSAJZI7DKXQBSMOKCYTRUCAXTTJW2',
+        hotAddress: 'GBDGYC73PPZKCQJVQHJ3LGQEY7QA5X5I5GU32MHOWXVLWVH5LJV4OUZ4',
+        coldBalance: 150000,
+        hotBalance: 7500,
+        prefix: 'cfo'
+      },
+      {
+        user: ctoUser,
+        coldAddress: 'GD2YNO7FGCSRO5JCMGJZEH5LNC664DYHMKIBJZPMV3ZXAPEXTBGH6OLK',
+        hotAddress: 'GDAHPZ2NSYIIHZXM56Y36SBVTV5QKFIZIDDJG5LQOXTNKZHA2WU2BXYZ',
+        coldBalance: 100000,
+        hotBalance: 5000,
+        prefix: 'cto'
+      }
+    ];
 
-    if (existingHotWallet) {
-      console.log('⚠️ Wallets already exist');
-    } else {
+    // Create wallets for each user
+    for (const config of walletConfigs) {
+      if (!config.user?.id) {
+        console.log(`⚠️ Skipping wallet creation for missing user`);
+        continue;
+      }
+
+      // Check if user already has wallets
+      const existingWallet = await prisma.wallet.findFirst({
+        where: { userId: config.user.id }
+      });
+
+      if (existingWallet) {
+        console.log(`⚠️ ${config.prefix.toUpperCase()} user already has wallets`);
+        continue;
+      }
+
       // Create Cold Wallet (Master - 95% funds)
       const coldWallet = await prisma.wallet.create({
         data: {
-          userId: ceoUser.id, // CEO owns the primary wallets
-          publicKey: 'GCVPYOTR4K2KYNXFC4OFRE2ZVC3CZIRUEIIXUJ7FDNZECZ4VYAVZURKI',
+          userId: config.user.id,
+          publicKey: config.coldAddress,
           derivationPath: "m/0'",
           walletType: 'COLD',
-          balance: 100000, // 100K XLM for testing
+          balance: config.coldBalance,
           reservedBalance: 0,
           maxBalance: null,
-          hsmKeyName: 'stellar_custody_cold_master',
-          hsmPartitionId: 'user_ceo_partition_001',
+          hsmKeyName: `stellar_custody_${config.prefix}_cold_master`,
+          hsmPartitionId: config.user.hsmPartitionId || `${config.prefix}_partition_001`,
           isHSMProtected: true,
           requiresTOTP: true,
-          parentWalletId: null // Cold is the master
+          parentWalletId: null
         }
       });
 
       // Create Hot Wallet (Derived - 5% funds)
       const hotWallet = await prisma.wallet.create({
         data: {
-          userId: ceoUser.id,
-          publicKey: 'GCMFYTMZJPDS2ECNYBU5XZ4KE5GHMPX7LYOWQII4TC4XRBO5WSAJDPFM',
+          userId: config.user.id,
+          publicKey: config.hotAddress,
           derivationPath: "m/0'/0'",
           walletType: 'HOT',
-          balance: 5000, // 5K XLM for testing
+          balance: config.hotBalance,
           reservedBalance: 0,
-          maxBalance: 5000,
-          hsmKeyName: 'stellar_custody_hot_derived',
-          hsmPartitionId: 'user_ceo_partition_001',
+          maxBalance: config.hotBalance,
+          hsmKeyName: `stellar_custody_${config.prefix}_hot_derived`,
+          hsmPartitionId: config.user.hsmPartitionId || `${config.prefix}_partition_001`,
           isHSMProtected: true,
           requiresTOTP: false,
-          parentWalletId: coldWallet.id // Hot is derived from Cold
+          parentWalletId: coldWallet.id
         }
       });
 
-      console.log(`✅ Cold Wallet created: ${coldWallet.id} (${coldWallet.publicKey})`);
-      console.log(`✅ Hot Wallet created: ${hotWallet.id} (${hotWallet.publicKey})`);
+      console.log(`✅ ${config.prefix.toUpperCase()} Wallets created:`);
+      console.log(`   🧊 Cold: ${coldWallet.publicKey} (${config.coldBalance} XLM)`);
+      console.log(`   🔥 Hot:  ${hotWallet.publicKey} (${config.hotBalance} XLM)`);
     }
 
     // ==================== CREATE THRESHOLD SCHEMES ====================

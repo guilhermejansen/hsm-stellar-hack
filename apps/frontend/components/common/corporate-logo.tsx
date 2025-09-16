@@ -64,7 +64,7 @@ export function CorporateLogo({
   return (
     <div className={baseClasses}>
       <div className={cn(
-        "rounded-lg bg-gradient-to-br from-stellar-500 to-stellar-700 flex items-center justify-center text-white font-bold",
+        "rounded-lg flex items-center justify-center text-white font-bold",
         sizeClasses[size],
         size === 'sm' ? 'w-6 text-xs' : 
         size === 'md' ? 'w-8 text-sm' :
