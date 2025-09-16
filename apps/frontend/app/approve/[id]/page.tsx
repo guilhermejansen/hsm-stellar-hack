@@ -408,7 +408,7 @@ export default function ApproveTransactionPage() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <span className="bg-stellar-100 text-stellar-700 rounded px-1.5 py-0.5 text-xs font-medium flex-shrink-0">2</span>
-                      <span>Find "Stellar Custody MVP" entry</span>
+                      <span>Find "Stellar Custody" entry</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <span className="bg-stellar-100 text-stellar-700 rounded px-1.5 py-0.5 text-xs font-medium flex-shrink-0">3</span>
@@ -432,7 +432,7 @@ export default function ApproveTransactionPage() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <span className="bg-stellar-100 text-stellar-700 rounded px-1.5 py-0.5 text-xs font-medium flex-shrink-0">2</span>
-                      <span>Find "Stellar Custody MVP" entry</span>
+                      <span>Find "Stellar Custody" entry</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <span className="bg-stellar-100 text-stellar-700 rounded px-1.5 py-0.5 text-xs font-medium flex-shrink-0">3</span>
