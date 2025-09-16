@@ -590,6 +590,36 @@ export class HSMService implements OnModuleInit {
   // ==================== EPHEMERAL TRANSACTION KEYS ====================
 
   /**
+   * Preview ephemeral public key (no HSM state change)
+   * Deterministically derives the public key for a given derivationPath
+   * without persisting key material in the HSM mock store.
+   */
+  async previewEphemeralPublicKey(params: {
+    parentKeyId: string;
+    derivationPath: string; // m/0'/0'/N'
+    partition: string;
+  }): Promise<{ publicKey: string }>{
+    if (this.mockEnabled) {
+      let parentSeed = this.mockKeys.get(params.parentKeyId);
+      if (!parentSeed) {
+        const partSeed = this.mockPartitions.get(params.partition);
+        if (partSeed) {
+          parentSeed = this.kdf(partSeed, "m/0'/0'");
+          this.mockKeys.set(params.parentKeyId, parentSeed);
+        }
+      }
+      if (!parentSeed) throw new Error("Parent key seed not found for preview");
+      const seed = this.kdf(parentSeed, params.derivationPath);
+      const kp = Keypair.fromRawEd25519Seed(seed);
+      return { publicKey: kp.publicKey() };
+    }
+
+    // TODO: Real HSM preview via public derivation call
+    // Fallback to placeholder error until real SDK is wired
+    throw new Error("HSM preview not implemented for real HSM mode");
+  }
+
+  /**
    * Generate ephemeral transaction key (m/0'/0'/N') with auto-expiry
    * Following transaction-privacy.mdc requirements
    */
