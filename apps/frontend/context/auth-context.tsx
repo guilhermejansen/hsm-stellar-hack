@@ -131,7 +131,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const newState = refreshAuthState();
         setAuthState(newState);
         
-        router.push('/dashboard');
+        // Use window.location.href for hard redirect to ensure middleware re-evaluation
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 100);
         toast.success('Authentication successful');
       }
       

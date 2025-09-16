@@ -35,8 +35,13 @@ export const setAccessToken = (token: string | null) => {
   if (typeof window !== 'undefined') {
     if (token) {
       localStorage.setItem('stellar_access_token', token);
+      // Also set cookie for middleware access
+      const isProduction = process.env.NODE_ENV === 'production';
+      document.cookie = `stellar_access_token=${token}; path=/; max-age=${24 * 60 * 60}; ${isProduction ? 'secure;' : ''} samesite=strict`;
     } else {
       localStorage.removeItem('stellar_access_token');
+      // Clear cookie
+      document.cookie = 'stellar_access_token=; path=/; max-age=0';
     }
   }
 };
@@ -55,7 +60,18 @@ export const setSessionToken = (token: string | null) => {
 export const getAccessToken = (): string | null => {
   if (accessToken) return accessToken;
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('stellar_access_token');
+    // Try localStorage first
+    const tokenFromStorage = localStorage.getItem('stellar_access_token');
+    if (tokenFromStorage) return tokenFromStorage;
+    
+    // Fallback to cookie if localStorage is empty
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'stellar_access_token') {
+        return value;
+      }
+    }
   }
   return null;
 };
@@ -71,6 +87,12 @@ export const getSessionToken = (): string | null => {
 export const clearTokens = () => {
   setAccessToken(null);
   setSessionToken(null);
+  
+  // Also clear cookies directly
+  if (typeof window !== 'undefined') {
+    document.cookie = 'stellar_access_token=; path=/; max-age=0';
+    document.cookie = 'stellar_session_token=; path=/; max-age=0';
+  }
 };
 
 // Request interceptor - Add authentication headers
@@ -114,17 +136,52 @@ apiClient.interceptors.response.use(
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
-      toast.error('Session expired. Please login again.');
+      toast.error('Session expired. Please login again.', {
+        duration: 3000,
+      });
     } else if (response?.status === 403) {
-      toast.error('Access denied. Insufficient permissions.');
+      toast.error('Access denied. Insufficient permissions.', {
+        duration: 5000,
+      });
+    } else if (response?.status === 404) {
+      toast.error('Resource not found. Please check your request.', {
+        duration: 4000,
+        action: {
+          label: 'Dismiss',
+          onClick: () => {},
+        },
+      });
     } else if (response?.status === 429) {
-      toast.error('Too many requests. Please try again later.');
+      toast.error('Too many requests. Please slow down.', {
+        duration: 6000,
+        description: 'Wait a moment before trying again',
+      });
     } else if (response?.status >= 500) {
-      toast.error('Server error. Please try again or contact support.');
+      toast.error('Server temporarily unavailable', {
+        duration: 7000,
+        description: 'Our team has been notified. Please try again in a moment.',
+        action: {
+          label: 'Retry',
+          onClick: () => window.location.reload(),
+        },
+      });
     } else if (response?.data?.error?.message) {
-      toast.error(response.data.error.message);
-    } else if (error.message) {
-      toast.error(error.message);
+      toast.error(response.data.error.message, {
+        duration: 5000,
+      });
+    } else if (error.message && !error.message.includes('Network Error')) {
+      toast.error(error.message, {
+        duration: 4000,
+      });
+    } else if (error.message?.includes('Network Error')) {
+      toast.error('Connection lost', {
+        duration: 6000,
+        description: 'Please check your internet connection',
+        action: {
+          label: 'Retry',
+          onClick: () => window.location.reload(),
+        },
+      });
     }
     
     return Promise.reject(error);

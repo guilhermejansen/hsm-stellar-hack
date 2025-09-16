@@ -62,7 +62,7 @@ export function OverviewCards({
               {guardianStats?.systemHealth?.minGuardiansAvailable ? 'Operational' : 'Attention'}
             </Badge>
             <p className="metric-label">
-              HSM: {guardianStats?.guardians?.hsmActivated || 0} activated
+              HSM Dinamo: {guardianStats?.guardians?.hsmActivated || 0} activated
             </p>
           </div>
         </CardContent>

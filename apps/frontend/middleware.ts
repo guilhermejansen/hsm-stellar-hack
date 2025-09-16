@@ -46,6 +46,17 @@ export function middleware(request: NextRequest) {
   const accessToken = request.cookies.get('stellar_access_token')?.value ||
                      request.headers.get('authorization')?.replace('Bearer ', '');
   
+  // Debug logging in development
+  if (process.env.NODE_ENV === 'development' && (isProtectedRoute || pathname === '/dashboard')) {
+    console.log('🔍 MIDDLEWARE DEBUG:', {
+      pathname,
+      isProtectedRoute,
+      hasAccessToken: !!accessToken,
+      cookieValue: request.cookies.get('stellar_access_token')?.value ? 'EXISTS' : 'MISSING',
+      allCookies: request.cookies.getAll().map(c => c.name),
+    });
+  }
+  
   // Handle protected routes
   if (isProtectedRoute && !accessToken) {
     // Redirect to login if not authenticated

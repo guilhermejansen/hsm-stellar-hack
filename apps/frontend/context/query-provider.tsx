@@ -47,7 +47,7 @@ export function QueryProvider({ children }: QueryProviderProps) {
             refetchOnMount: true,
             
             // Background refetch interval for critical data
-            refetchInterval: (data, query) => {
+            refetchInterval: (query) => {
               // Refetch guardian and transaction data more frequently
               if (query.queryKey[0] === 'guardians' || query.queryKey[0] === 'transactions') {
                 return 30 * 1000; // 30 seconds
@@ -79,8 +79,6 @@ export function QueryProvider({ children }: QueryProviderProps) {
       {process.env.NODE_ENV === 'development' && (
         <ReactQueryDevtools
           initialIsOpen={false}
-          position="bottom-right"
-          buttonPosition="bottom-right"
         />
       )}
     </QueryClientProvider>

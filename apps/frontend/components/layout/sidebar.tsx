@@ -13,8 +13,10 @@ import {
   Shield, 
   Activity,
   Settings,
-  LogOut
+  LogOut,
+  Eye
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /**
  * Sidebar Navigation Component
@@ -51,7 +53,7 @@ const navigationItems = [
     name: 'Privacy',
     href: '/dashboard/privacy',
     icon: Shield,
-    description: 'Ephemeral keys & privacy protection',
+    description: 'Transaction keys & privacy protection',
   },
   {
     name: 'Monitoring',
@@ -92,7 +94,7 @@ export function Sidebar() {
             return (
               <Link
                 key={item.name}
-                href={item.href}
+                href={item.href as any}
                 className={cn(
                   'sidebar-nav-item group',
                   isActive

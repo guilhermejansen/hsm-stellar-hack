@@ -69,7 +69,7 @@ export function Header() {
   };
 
   return (
-    <header className="bg-white border-b border-corporate-200 px-6 py-4">
+    <header className="bg-white dark:bg-corporate-900 border-b border-corporate-200 dark:border-corporate-700 px-6 py-4">
       <div className="flex items-center justify-between">
         {/* Mobile Menu Button */}
         <div className="md:hidden">
@@ -80,10 +80,10 @@ export function Header() {
 
         {/* Page Title - Dynamic based on current route */}
         <div className="flex-1 md:flex-none">
-          <h1 className="text-xl font-semibold text-corporate-900">
+          <h1 className="text-xl font-semibold text-corporate-900 dark:text-corporate-100">
             Stellar Custody Dashboard
           </h1>
-          <p className="text-sm text-corporate-600 mt-0.5">
+          <p className="text-sm text-corporate-600 dark:text-corporate-300 mt-0.5">
             Multi-Signature Security Management
           </p>
         </div>
@@ -91,12 +91,10 @@ export function Header() {
         {/* Right Side - Status & User Info */}
         <div className="flex items-center space-x-4">
           {/* System Status */}
-          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-corporate-50 rounded-lg">
           <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-corporate-50 dark:bg-corporate-800 rounded-lg">
             {getStatusIcon()}
             <span className="text-sm text-corporate-700 dark:text-corporate-300">System:</span>
             {getStatusBadge()}
-          </div>
           </div>
 
           {/* Notifications Center */}
@@ -150,7 +148,7 @@ export function Header() {
           {/* Activity Indicator */}
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-success-500 rounded-full animate-pulse"></div>
-            <span className="hidden lg:inline text-xs text-corporate-500">
+            <span className="hidden lg:inline text-xs text-corporate-500 dark:text-corporate-400">
               Online
             </span>
           </div>

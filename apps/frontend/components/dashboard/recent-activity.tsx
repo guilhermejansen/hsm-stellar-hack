@@ -14,7 +14,9 @@ import {
   ExternalLink,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Shield,
+  Plus
 } from 'lucide-react';
 import Link from 'next/link';
 
