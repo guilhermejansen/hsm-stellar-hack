@@ -102,7 +102,7 @@ export default function GuardiansPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-corporate-900 dark:text-corporate-100">Guardian Management</h1>
-          <p className="text-corporate-600 dark:text-corporate-300 mt-1"></p>
+          <p className="text-corporate-600 dark:text-corporate-300 mt-1">
             Manage the 3-guardian system (CEO, CFO, CTO) with HSM Dinamo security
           </p>
         </div>
