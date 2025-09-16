@@ -1,24 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { StrKey } from '@stellar/stellar-sdk';
-import * as crypto from 'crypto';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { StrKey } from "@stellar/stellar-sdk";
+import * as crypto from "crypto";
 
-import { DatabaseService } from '../database/database.service';
-import { HSMService } from '../hsm/hsm.service';
-import { AuditService } from '../common/audit.service';
+import { DatabaseService } from "../database/database.service";
+import { HSMService } from "../hsm/hsm.service";
+import { AuditService } from "../common/audit.service";
 
 /**
  * 🔑 Transaction Key Service - Ephemeral Transaction Keys for Privacy
- * 
+ *
  * Following transaction-privacy.mdc complete implementation:
- * 
+ *
  * **BIP32 Hierarchy Complete:**
  * - Master Key (m) → HSM partition root
  * - Cold Key (m/0') → 95% funds, static address
- * - Hot Key (m/0'/0') → 5% funds, static address  
+ * - Hot Key (m/0'/0') → 5% funds, static address
  * - Transaction Keys (m/0'/0'/N') → Ephemeral, new per transaction
- * 
+ *
  * **Privacy Protection:**
  * - Each transaction gets unique address (m/0'/0'/N')
  * - Keys "die" after use (HSM auto-destroy)
@@ -33,7 +33,7 @@ export class TransactionKeyService {
     private readonly database: DatabaseService,
     private readonly hsmService: HSMService,
     private readonly auditService: AuditService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
   ) {}
 
   // ==================== EPHEMERAL KEY GENERATION ====================
@@ -45,34 +45,36 @@ export class TransactionKeyService {
   async generateEphemeralTransactionKey(
     transactionId: string,
     hotWalletId: string,
-    guardianId: string
+    guardianId: string,
   ): Promise<{
     transactionKeyId: string;
-    ephemeralAddress: string;  // NEW ADDRESS per transaction
-    derivationPath: string;    // m/0'/0'/N'
+    ephemeralAddress: string; // NEW ADDRESS per transaction
+    derivationPath: string; // m/0'/0'/N'
     hsmKeyId: string;
     expiresAt: Date;
     isEphemeral: boolean;
   }> {
     const startTime = Date.now();
-    
+
     try {
-      this.logger.log(`🔑 Generating ephemeral key for transaction: ${transactionId}`);
+      this.logger.log(
+        `🔑 Generating ephemeral key for transaction: ${transactionId}`,
+      );
 
       // Get hot wallet with HSM partition info
       const hotWallet = await this.database.wallet.findUnique({
         where: { id: hotWalletId },
-        include: { 
+        include: {
           user: true,
           transactionKeys: {
-            orderBy: { transactionIndex: 'desc' },
-            take: 1
-          }
-        }
+            orderBy: { transactionIndex: "desc" },
+            take: 1,
+          },
+        },
       });
 
-      if (!hotWallet || hotWallet.walletType !== 'HOT') {
-        throw new Error('Hot wallet not found or invalid type');
+      if (!hotWallet || hotWallet.walletType !== "HOT") {
+        throw new Error("Hot wallet not found or invalid type");
       }
 
       // Calculate next transaction index for this wallet
@@ -80,18 +82,21 @@ export class TransactionKeyService {
       const transactionIndex = (lastTransactionKey?.transactionIndex || 0) + 1;
       const derivationPath = `m/0'/0'/${transactionIndex}'`;
 
-      this.logger.log(`📍 Ephemeral key derivation: ${derivationPath} (index: ${transactionIndex})`);
+      this.logger.log(
+        `📍 Ephemeral key derivation: ${derivationPath} (index: ${transactionIndex})`,
+      );
 
       // Generate ephemeral key in HSM with auto-expiry
-      const ephemeralKeyInfo = await this.hsmService.generateEphemeralTransactionKey({
-        parentKeyId: hotWallet.hsmKeyName,
-        derivationPath: derivationPath,
-        partition: hotWallet.hsmPartitionId,
-        transactionIndex: transactionIndex,
-        expiresIn: 3600, // 1 hour
-        oneTimeUse: true,
-        autoDestroy: true
-      });
+      const ephemeralKeyInfo =
+        await this.hsmService.generateEphemeralTransactionKey({
+          parentKeyId: hotWallet.hsmKeyName,
+          derivationPath: derivationPath,
+          partition: hotWallet.hsmPartitionId,
+          transactionIndex: transactionIndex,
+          expiresIn: 3600, // 1 hour
+          oneTimeUse: true,
+          autoDestroy: true,
+        });
 
       // Generate NEW Stellar address for this transaction (privacy protection)
       const ephemeralAddress = ephemeralKeyInfo.publicKey;
@@ -110,15 +115,15 @@ export class TransactionKeyService {
           isUsed: false,
           isExpired: false,
           expiresAt: expiresAt,
-          guardianId: guardianId
-        }
+          guardianId: guardianId,
+        },
       });
 
       // Audit log - ephemeral key generation
       await this.auditService.logHSMOperation(
         guardianId,
-        'ephemeral_transaction_key_generated',
-        'success',
+        "ephemeral_transaction_key_generated",
+        "success",
         hotWallet.hsmPartitionId,
         ephemeralKeyInfo.keyId,
         {
@@ -128,11 +133,13 @@ export class TransactionKeyService {
           ephemeralAddress,
           expiresAt: expiresAt.toISOString(),
           privacyProtection: true,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.log(`✅ Ephemeral transaction key generated: ${ephemeralAddress} (${derivationPath})`);
+      this.logger.log(
+        `✅ Ephemeral transaction key generated: ${ephemeralAddress} (${derivationPath})`,
+      );
       this.logger.log(`⏰ Key expires at: ${expiresAt.toISOString()}`);
 
       return {
@@ -141,24 +148,26 @@ export class TransactionKeyService {
         derivationPath: derivationPath,
         hsmKeyId: ephemeralKeyInfo.keyId,
         expiresAt: expiresAt,
-        isEphemeral: true
+        isEphemeral: true,
       };
-
     } catch (error) {
       await this.auditService.logHSMOperation(
         guardianId,
-        'ephemeral_key_generation_failed',
-        'failure',
+        "ephemeral_key_generation_failed",
+        "failure",
         undefined,
         undefined,
         {
           transactionId,
           error: error.message,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
-      
-      this.logger.error('❌ Ephemeral transaction key generation failed:', error.message);
+
+      this.logger.error(
+        "❌ Ephemeral transaction key generation failed:",
+        error.message,
+      );
       throw error;
     }
   }
@@ -171,9 +180,10 @@ export class TransactionKeyService {
    */
   async useEphemeralKeyForSigning(
     transactionId: string,
-    totpCode: string,
+    totpCode: string | undefined,
     guardianId: string,
-    rawTransactionData: string
+    rawTransactionData: string,
+    keyReleaseId?: string,
   ): Promise<{
     signature: string;
     ephemeralAddress: string;
@@ -181,9 +191,11 @@ export class TransactionKeyService {
     signedAt: Date;
   }> {
     const startTime = Date.now();
-    
+
     try {
-      this.logger.log(`🔐 Using ephemeral key for transaction: ${transactionId}`);
+      this.logger.log(
+        `🔐 Using ephemeral key for transaction: ${transactionId}`,
+      );
 
       // Get ephemeral transaction key
       const transactionKey = await this.database.transactionKey.findUnique({
@@ -191,29 +203,31 @@ export class TransactionKeyService {
         include: {
           transaction: true,
           parentWallet: {
-            include: { user: true }
-          }
-        }
+            include: { user: true },
+          },
+        },
       });
 
       if (!transactionKey) {
-        throw new Error('Ephemeral transaction key not found');
+        throw new Error("Ephemeral transaction key not found");
       }
 
       if (transactionKey.isUsed) {
-        throw new Error('Ephemeral key already used (one-time use only)');
+        throw new Error("Ephemeral key already used (one-time use only)");
       }
 
       if (transactionKey.expiresAt < new Date()) {
         await this.expireTransactionKey(transactionKey.id);
-        throw new Error('Ephemeral key expired');
+        throw new Error("Ephemeral key expired");
       }
 
       if (!transactionKey.isActive) {
-        throw new Error('Ephemeral key is not active');
+        throw new Error("Ephemeral key is not active");
       }
 
-      this.logger.log(`🎯 Using ephemeral address: ${transactionKey.publicKey}`);
+      this.logger.log(
+        `🎯 Using ephemeral address: ${transactionKey.publicKey}`,
+      );
       this.logger.log(`📍 Derivation path: ${transactionKey.derivationPath}`);
 
       // HSM signs transaction with ephemeral key (ONE-TIME USE)
@@ -221,9 +235,10 @@ export class TransactionKeyService {
         ephemeralKeyId: transactionKey.hsmKeyId,
         rawTransaction: rawTransactionData,
         totpCode: totpCode,
+        releaseId: keyReleaseId,
         guardianId: guardianId,
         partitionId: transactionKey.parentWallet.hsmPartitionId,
-        oneTimeUse: true
+        oneTimeUse: true,
       });
 
       const signedAt = new Date();
@@ -236,15 +251,18 @@ export class TransactionKeyService {
           usedAt: signedAt,
           isActive: false, // Deactivate after use
           guardianId: guardianId,
-          totpCodeUsed: totpCode.substring(0, 2) + '****', // Audit trail (partial)
-          signatureHash: crypto.createHash('sha256').update(signatureResult.signature).digest('hex')
-        }
+          totpCodeUsed: totpCode ? totpCode.substring(0, 2) + "****" : undefined, // Audit trail (partial)
+          signatureHash: crypto
+            .createHash("sha256")
+            .update(signatureResult.signature)
+            .digest("hex"),
+        },
       });
 
       // HSM automatically destroys ephemeral key after signing
       const keyDestroyed = await this.destroyEphemeralKeyInHSM(
         transactionKey.hsmKeyId,
-        transactionKey.parentWallet.hsmPartitionId
+        transactionKey.parentWallet.hsmPartitionId,
       );
 
       if (keyDestroyed) {
@@ -252,16 +270,16 @@ export class TransactionKeyService {
           where: { id: transactionKey.id },
           data: {
             isExpired: true,
-            destroyedAt: new Date()
-          }
+            destroyedAt: new Date(),
+          },
         });
       }
 
       // Audit log - ephemeral key used and destroyed
       await this.auditService.logHSMOperation(
         guardianId,
-        'ephemeral_key_used_and_destroyed',
-        'success',
+        "ephemeral_key_used_and_destroyed",
+        "success",
         transactionKey.parentWallet.hsmPartitionId,
         transactionKey.hsmKeyId,
         {
@@ -271,35 +289,38 @@ export class TransactionKeyService {
           signatureGenerated: true,
           keyDestroyed: keyDestroyed,
           privacyProtected: true,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.log(`✅ Ephemeral key used and destroyed: ${transactionKey.publicKey}`);
-      this.logger.log(`🛡️ Transaction privacy protected - address cannot be correlated`);
+      this.logger.log(
+        `✅ Ephemeral key used and destroyed: ${transactionKey.publicKey}`,
+      );
+      this.logger.log(
+        `🛡️ Transaction privacy protected - address cannot be correlated`,
+      );
 
       return {
         signature: signatureResult.signature,
         ephemeralAddress: transactionKey.publicKey,
         keyDestroyed: keyDestroyed,
-        signedAt: signedAt
+        signedAt: signedAt,
       };
-
     } catch (error) {
       await this.auditService.logHSMOperation(
         guardianId,
-        'ephemeral_key_usage_failed',
-        'failure',
+        "ephemeral_key_usage_failed",
+        "failure",
         undefined,
         undefined,
         {
           transactionId,
           error: error.message,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
-      
-      this.logger.error('❌ Ephemeral key usage failed:', error.message);
+
+      this.logger.error("❌ Ephemeral key usage failed:", error.message);
       throw error;
     }
   }
@@ -311,7 +332,7 @@ export class TransactionKeyService {
    */
   private async destroyEphemeralKeyInHSM(
     ephemeralKeyId: string,
-    partitionId: string
+    partitionId: string,
   ): Promise<boolean> {
     try {
       this.logger.log(`💀 Destroying ephemeral key in HSM: ${ephemeralKeyId}`);
@@ -320,18 +341,20 @@ export class TransactionKeyService {
       const destroyResult = await this.hsmService.destroyEphemeralKey({
         keyId: ephemeralKeyId,
         partition: partitionId,
-        reason: 'transaction_completed'
+        reason: "transaction_completed",
       });
 
       if (destroyResult.success) {
         this.logger.log(`✅ Ephemeral key destroyed in HSM: ${ephemeralKeyId}`);
       } else {
-        this.logger.warn(`⚠️ HSM key destruction failed: ${destroyResult.reason}`);
+        this.logger.warn(
+          `⚠️ HSM key destruction failed: ${destroyResult.reason}`,
+        );
       }
 
       return destroyResult.success;
     } catch (error) {
-      this.logger.error('❌ HSM key destruction failed:', error.message);
+      this.logger.error("❌ HSM key destruction failed:", error.message);
       return false;
     }
   }
@@ -345,13 +368,13 @@ export class TransactionKeyService {
         where: { id: transactionKeyId },
         data: {
           isActive: false,
-          isExpired: true
-        }
+          isExpired: true,
+        },
       });
-      
+
       this.logger.log(`⏰ Transaction key expired: ${transactionKeyId}`);
     } catch (error) {
-      this.logger.error('❌ Failed to expire transaction key:', error.message);
+      this.logger.error("❌ Failed to expire transaction key:", error.message);
     }
   }
 
@@ -362,18 +385,18 @@ export class TransactionKeyService {
   @Cron(CronExpression.EVERY_HOUR)
   async cleanExpiredEphemeralKeys(): Promise<number> {
     try {
-      this.logger.log('🧹 Cleaning expired ephemeral transaction keys...');
+      this.logger.log("🧹 Cleaning expired ephemeral transaction keys...");
 
       // Find expired keys
       const expiredKeys = await this.database.transactionKey.findMany({
         where: {
           OR: [
             { expiresAt: { lt: new Date() } },
-            { isUsed: true, usedAt: { lt: new Date(Date.now() - 3600000) } } // Used > 1 hour ago
+            { isUsed: true, usedAt: { lt: new Date(Date.now() - 3600000) } }, // Used > 1 hour ago
           ],
-          isActive: true
+          isActive: true,
         },
-        include: { parentWallet: true }
+        include: { parentWallet: true },
       });
 
       // Destroy expired keys in HSM and mark in database
@@ -384,7 +407,7 @@ export class TransactionKeyService {
           if (!key.destroyedAt) {
             await this.destroyEphemeralKeyInHSM(
               key.hsmKeyId,
-              key.parentWallet.hsmPartitionId
+              key.parentWallet.hsmPartitionId,
             );
           }
 
@@ -394,8 +417,8 @@ export class TransactionKeyService {
             data: {
               isActive: false,
               isExpired: true,
-              destroyedAt: key.destroyedAt || new Date()
-            }
+              destroyedAt: key.destroyedAt || new Date(),
+            },
           });
 
           cleanedCount++;
@@ -405,25 +428,25 @@ export class TransactionKeyService {
       }
 
       this.logger.log(`✅ Cleaned ${cleanedCount} expired ephemeral keys`);
-      
+
       // Audit log cleanup
       await this.auditService.logEvent({
         timestamp: new Date(),
-        userId: 'system',
-        action: 'ephemeral_keys_cleaned',
-        resource: 'transaction_key',
-        ip: 'system',
-        userAgent: 'scheduled-task',
-        result: 'success',
+        userId: "system",
+        action: "ephemeral_keys_cleaned",
+        resource: "transaction_key",
+        ip: "system",
+        userAgent: "scheduled-task",
+        result: "success",
         metadata: {
           cleanedCount,
-          totalExpired: expiredKeys.length
-        }
+          totalExpired: expiredKeys.length,
+        },
       });
 
       return cleanedCount;
     } catch (error) {
-      this.logger.error('❌ Failed to clean expired keys:', error.message);
+      this.logger.error("❌ Failed to clean expired keys:", error.message);
       return 0;
     }
   }
@@ -444,8 +467,8 @@ export class TransactionKeyService {
               amount: true,
               toAddress: true,
               status: true,
-              createdAt: true
-            }
+              createdAt: true,
+            },
           },
           parentWallet: {
             select: {
@@ -453,13 +476,13 @@ export class TransactionKeyService {
               publicKey: true,
               walletType: true,
               derivationPath: true,
-              hsmPartitionId: true
-            }
-          }
-        }
+              hsmPartitionId: true,
+            },
+          },
+        },
       });
     } catch (error) {
-      this.logger.error('❌ Failed to get transaction key:', error.message);
+      this.logger.error("❌ Failed to get transaction key:", error.message);
       throw error;
     }
   }
@@ -469,23 +492,18 @@ export class TransactionKeyService {
    */
   async getEphemeralKeyStats() {
     try {
-      const [
-        totalKeys,
-        activeKeys,
-        usedKeys,
-        expiredKeys,
-        recentKeys
-      ] = await Promise.all([
-        this.database.transactionKey.count(),
-        this.database.transactionKey.count({ where: { isActive: true } }),
-        this.database.transactionKey.count({ where: { isUsed: true } }),
-        this.database.transactionKey.count({ where: { isExpired: true } }),
-        this.database.transactionKey.count({
-          where: {
-            createdAt: { gte: new Date(Date.now() - 86400000) } // Last 24 hours
-          }
-        })
-      ]);
+      const [totalKeys, activeKeys, usedKeys, expiredKeys, recentKeys] =
+        await Promise.all([
+          this.database.transactionKey.count(),
+          this.database.transactionKey.count({ where: { isActive: true } }),
+          this.database.transactionKey.count({ where: { isUsed: true } }),
+          this.database.transactionKey.count({ where: { isExpired: true } }),
+          this.database.transactionKey.count({
+            where: {
+              createdAt: { gte: new Date(Date.now() - 86400000) }, // Last 24 hours
+            },
+          }),
+        ]);
 
       const usageRate = totalKeys > 0 ? (usedKeys / totalKeys) * 100 : 0;
       const privacyScore = totalKeys > 0 ? (expiredKeys / totalKeys) * 100 : 0;
@@ -498,10 +516,15 @@ export class TransactionKeyService {
         recent24h: recentKeys,
         usageRate: Math.round(usageRate * 100) / 100,
         privacyScore: Math.round(privacyScore * 100) / 100,
-        privacyProtection: privacyScore > 80 ? 'EXCELLENT' : privacyScore > 60 ? 'GOOD' : 'NEEDS_IMPROVEMENT'
+        privacyProtection:
+          privacyScore > 80
+            ? "EXCELLENT"
+            : privacyScore > 60
+              ? "GOOD"
+              : "NEEDS_IMPROVEMENT",
       };
     } catch (error) {
-      this.logger.error('❌ Failed to get ephemeral key stats:', error.message);
+      this.logger.error("❌ Failed to get ephemeral key stats:", error.message);
       throw error;
     }
   }
@@ -512,7 +535,7 @@ export class TransactionKeyService {
   async verifyTransactionPrivacy(userId: string): Promise<{
     privacyScore: number;
     addressesGenerated: number;
-    correlationRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+    correlationRisk: "LOW" | "MEDIUM" | "HIGH";
     recommendations: string[];
   }> {
     try {
@@ -525,45 +548,50 @@ export class TransactionKeyService {
             select: {
               publicKey: true,
               createdAt: true,
-              derivationPath: true
-            }
-          }
-        }
+              derivationPath: true,
+            },
+          },
+        },
       });
 
-      const allAddresses = userWallets.flatMap(wallet => 
-        wallet.transactionKeys.map(key => key.publicKey)
+      const allAddresses = userWallets.flatMap((wallet) =>
+        wallet.transactionKeys.map((key) => key.publicKey),
       );
 
       const uniqueAddresses = new Set(allAddresses).size;
       const totalTransactions = allAddresses.length;
-      
+
       // Privacy score: 100% if every transaction used unique address
-      const privacyScore = totalTransactions > 0 ? (uniqueAddresses / totalTransactions) * 100 : 100;
-      
-      let correlationRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+      const privacyScore =
+        totalTransactions > 0
+          ? (uniqueAddresses / totalTransactions) * 100
+          : 100;
+
+      let correlationRisk: "LOW" | "MEDIUM" | "HIGH";
       let recommendations: string[] = [];
 
       if (privacyScore >= 95) {
-        correlationRisk = 'LOW';
-        recommendations.push('✅ Excellent privacy protection maintained');
+        correlationRisk = "LOW";
+        recommendations.push("✅ Excellent privacy protection maintained");
       } else if (privacyScore >= 80) {
-        correlationRisk = 'MEDIUM';
-        recommendations.push('⚠️ Consider increasing ephemeral key usage');
+        correlationRisk = "MEDIUM";
+        recommendations.push("⚠️ Consider increasing ephemeral key usage");
       } else {
-        correlationRisk = 'HIGH';
-        recommendations.push('🚨 Privacy at risk - ensure all transactions use ephemeral keys');
-        recommendations.push('🔧 Check HSM ephemeral key generation');
+        correlationRisk = "HIGH";
+        recommendations.push(
+          "🚨 Privacy at risk - ensure all transactions use ephemeral keys",
+        );
+        recommendations.push("🔧 Check HSM ephemeral key generation");
       }
 
       return {
         privacyScore: Math.round(privacyScore * 100) / 100,
         addressesGenerated: uniqueAddresses,
         correlationRisk,
-        recommendations
+        recommendations,
       };
     } catch (error) {
-      this.logger.error('❌ Privacy verification failed:', error.message);
+      this.logger.error("❌ Privacy verification failed:", error.message);
       throw error;
     }
   }
@@ -573,7 +601,10 @@ export class TransactionKeyService {
   /**
    * Check if transaction needs ephemeral key
    */
-  async needsEphemeralKey(amount: string, walletType: 'HOT' | 'COLD'): Promise<boolean> {
+  async needsEphemeralKey(
+    amount: string,
+    walletType: "HOT" | "COLD",
+  ): Promise<boolean> {
     // All transactions should use ephemeral keys for privacy
     // Even small amounts benefit from privacy protection
     return true;
@@ -586,12 +617,15 @@ export class TransactionKeyService {
     try {
       const lastKey = await this.database.transactionKey.findFirst({
         where: { parentWalletId: walletId },
-        orderBy: { transactionIndex: 'desc' }
+        orderBy: { transactionIndex: "desc" },
       });
 
       return (lastKey?.transactionIndex || 0) + 1;
     } catch (error) {
-      this.logger.error('❌ Failed to get next transaction index:', error.message);
+      this.logger.error(
+        "❌ Failed to get next transaction index:",
+        error.message,
+      );
       return 1;
     }
   }
@@ -616,52 +650,61 @@ export class TransactionKeyService {
         where: {
           createdAt: {
             gte: startDate,
-            lte: endDate
-          }
+            lte: endDate,
+          },
         },
         include: {
-          TransactionKey: true
-        }
+          TransactionKey: true,
+        },
       });
 
       const report = {
         period: {
           start: startDate.toISOString(),
-          end: endDate.toISOString()
+          end: endDate.toISOString(),
         },
         transactions: {
           total: transactions.length,
-          withEphemeralKeys: transactions.filter(tx => tx.TransactionKey).length,
-          privacyCompliant: transactions.filter(tx => 
-            tx.TransactionKey && tx.TransactionKey.isUsed && tx.TransactionKey.destroyedAt
-          ).length
+          withEphemeralKeys: transactions.filter((tx) => tx.TransactionKey)
+            .length,
+          privacyCompliant: transactions.filter(
+            (tx) =>
+              tx.TransactionKey &&
+              tx.TransactionKey.isUsed &&
+              tx.TransactionKey.destroyedAt,
+          ).length,
         },
         privacy: {
           score: 0, // Will be calculated
           addressReuse: 0,
-          correlationRisk: 'LOW' as 'LOW' | 'MEDIUM' | 'HIGH'
+          correlationRisk: "LOW" as "LOW" | "MEDIUM" | "HIGH",
         },
-        recommendations: [] as string[]
+        recommendations: [] as string[],
       };
 
       // Calculate privacy score
-      const ephemeralPercentage = report.transactions.total > 0 
-        ? (report.transactions.withEphemeralKeys / report.transactions.total) * 100 
-        : 100;
+      const ephemeralPercentage =
+        report.transactions.total > 0
+          ? (report.transactions.withEphemeralKeys /
+              report.transactions.total) *
+            100
+          : 100;
 
       report.privacy.score = Math.round(ephemeralPercentage * 100) / 100;
 
       if (ephemeralPercentage >= 95) {
-        report.privacy.correlationRisk = 'LOW';
-        report.recommendations.push('✅ Excellent privacy compliance');
+        report.privacy.correlationRisk = "LOW";
+        report.recommendations.push("✅ Excellent privacy compliance");
       } else {
-        report.privacy.correlationRisk = 'HIGH';
-        report.recommendations.push('🚨 Increase ephemeral key usage for better privacy');
+        report.privacy.correlationRisk = "HIGH";
+        report.recommendations.push(
+          "🚨 Increase ephemeral key usage for better privacy",
+        );
       }
 
       return report;
     } catch (error) {
-      this.logger.error('❌ Failed to generate privacy report:', error.message);
+      this.logger.error("❌ Failed to generate privacy report:", error.message);
       throw error;
     }
   }

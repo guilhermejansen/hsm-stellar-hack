@@ -1,24 +1,28 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Decimal } from '@prisma/client/runtime/library';
-import * as crypto from 'crypto';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Decimal } from "@prisma/client/runtime/library";
+import * as crypto from "crypto";
 
-import { DatabaseService } from '../database/database.service';
-import { HSMService } from '../hsm/hsm.service';
-import { ChallengeService } from '../challenges/challenge.service';
-import { GuardianService } from '../guardians/guardian.service';
-import { WalletService } from '../wallets/wallet.service';
-import { TransactionKeyService } from '../wallets/transaction-key.service';
-import { AuditService } from '../common/audit.service';
-import { TransactionCreationRequest, TransactionApprovalRequest, ThresholdConfiguration } from '../common/interfaces';
+import { DatabaseService } from "../database/database.service";
+import { HSMService } from "../hsm/hsm.service";
+import { ChallengeService } from "../challenges/challenge.service";
+import { GuardianService } from "../guardians/guardian.service";
+import { WalletService } from "../wallets/wallet.service";
+import { TransactionKeyService } from "../wallets/transaction-key.service";
+import { AuditService } from "../common/audit.service";
+import {
+  TransactionCreationRequest,
+  TransactionApprovalRequest,
+  ThresholdConfiguration,
+} from "../common/interfaces";
 
 /**
  * 💰 Transaction Service - Multi-Sig Transaction Processing
- * 
+ *
  * Following FINAL_ARCHITECTURE_SUMMARY.mdc threshold schemes:
  * - 2-of-3 for transactions < 10,000 XLM
  * - 3-of-3 for transactions > 10,000 XLM or Cold Wallet access
- * 
+ *
  * Following stellar-custody-mvp.mdc transaction approval flow:
  * 1. Create RAW transaction
  * 2. Generate OCRA-like challenge
@@ -26,7 +30,7 @@ import { TransactionCreationRequest, TransactionApprovalRequest, ThresholdConfig
  * 4. Collect guardian approvals with challenge-response
  * 5. HSM signs with released keys
  * 6. Broadcast to Stellar blockchain
- * 
+ *
  * Security:
  * - All transactions require HSM signature
  * - High-value transactions require OCRA-like challenges
@@ -44,7 +48,7 @@ export class TransactionService {
     private readonly walletService: WalletService,
     private readonly transactionKeyService: TransactionKeyService,
     private readonly auditService: AuditService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
   ) {}
 
   // ==================== TRANSACTION CREATION ====================
@@ -54,7 +58,7 @@ export class TransactionService {
    */
   async createTransaction(
     userId: string,
-    request: TransactionCreationRequest
+    request: TransactionCreationRequest,
   ): Promise<{
     transactionId: string;
     requiresApproval: boolean;
@@ -62,29 +66,42 @@ export class TransactionService {
     challenge?: any;
   }> {
     const startTime = Date.now();
-    
+
     try {
-      this.logger.log(`💰 Creating transaction: ${request.amount} XLM to ${request.toAddress}`);
+      this.logger.log(
+        `💰 Creating transaction: ${request.amount} XLM to ${request.toAddress}`,
+      );
 
       // 1. Validate transaction request
       await this.validateTransactionRequest(request);
 
       // 2. Get source wallet and validate balance
-      const wallet = await this.walletService.getWalletById(request.fromWalletId);
+      const wallet = await this.walletService.getWalletById(
+        request.fromWalletId,
+      );
       if (!wallet) {
-        throw new Error('Source wallet not found');
+        throw new Error("Source wallet not found");
       }
 
-      const canSend = await this.walletService.canSendAmount(request.fromWalletId, request.amount);
+      const canSend = await this.walletService.canSendAmount(
+        request.fromWalletId,
+        request.amount,
+      );
       if (!canSend.canSend) {
-        throw new Error(canSend.reason || 'Insufficient balance');
+        throw new Error(canSend.reason || "Insufficient balance");
       }
 
       // 3. Determine threshold scheme based on amount and wallet type
-      const thresholdScheme = await this.determineThresholdScheme(request.amount, wallet.walletType);
+      const thresholdScheme = await this.determineThresholdScheme(
+        request.amount,
+        wallet.walletType,
+      );
 
       // 4. Check if transaction requires approval
-      const requiresApproval = this.requiresApproval(request.amount, wallet.walletType);
+      const requiresApproval = this.requiresApproval(
+        request.amount,
+        wallet.walletType,
+      );
 
       // 5. Create transaction record
       const transaction = await this.database.transaction.create({
@@ -94,35 +111,47 @@ export class TransactionService {
           toAddress: request.toAddress,
           amount: new Decimal(request.amount),
           memo: request.memo,
-          status: requiresApproval ? 'AWAITING_APPROVAL' : 'PENDING',
+          status: requiresApproval ? "AWAITING_APPROVAL" : "PENDING",
           txType: request.txType,
           requiresApproval,
-          requiredApprovals: thresholdScheme.threshold
-        }
+          requiredApprovals: thresholdScheme.threshold,
+        },
       });
 
       // 6. Generate ephemeral transaction key (m/0'/0'/N') for privacy protection
       // Following transaction-privacy.mdc: "ele sempre vai me gerar um endereço novo"
-      const ephemeralKey = await this.transactionKeyService.generateEphemeralTransactionKey(
-        transaction.id,
-        request.fromWalletId,
-        userId
+      const ephemeralKey =
+        await this.transactionKeyService.generateEphemeralTransactionKey(
+          transaction.id,
+          request.fromWalletId,
+          userId,
+        );
+
+      this.logger.log(
+        `🎯 NEW EPHEMERAL ADDRESS generated: ${ephemeralKey.ephemeralAddress}`,
+      );
+      this.logger.log(`📍 Derivation path: ${ephemeralKey.derivationPath}`);
+      this.logger.log(
+        `🛡️ Privacy protected: Transaction cannot be correlated to wallet`,
       );
 
-      this.logger.log(`🎯 NEW EPHEMERAL ADDRESS generated: ${ephemeralKey.ephemeralAddress}`);
-      this.logger.log(`📍 Derivation path: ${ephemeralKey.derivationPath}`);
-      this.logger.log(`🛡️ Privacy protected: Transaction cannot be correlated to wallet`);
-
       // 7. Reserve balance for transaction
-      await this.walletService.reserveBalance(request.fromWalletId, request.amount);
+      await this.walletService.reserveBalance(
+        request.fromWalletId,
+        request.amount,
+      );
 
       let challenge = undefined;
 
       // 8. Generate challenge if required (high-value or critical transactions)
       if (requiresApproval && thresholdScheme.challengeRequired) {
-        challenge = await this.challengeService.generateTransactionChallenge(transaction.id);
-        
-        this.logger.log(`🎯 Challenge generated for transaction: ${challenge.challengeHash}`);
+        challenge = await this.challengeService.generateTransactionChallenge(
+          transaction.id,
+        );
+
+        this.logger.log(
+          `🎯 Challenge generated for transaction: ${challenge.challengeHash}`,
+        );
       }
 
       // 9. If no approval required, execute immediately with ephemeral key
@@ -135,8 +164,8 @@ export class TransactionService {
       await this.auditService.logTransaction(
         userId,
         transaction.id,
-        'created',
-        'success',
+        "created",
+        "success",
         {
           amount: request.amount,
           toAddress: request.toAddress,
@@ -144,38 +173,41 @@ export class TransactionService {
           requiresApproval,
           thresholdScheme: thresholdScheme.type,
           challengeGenerated: !!challenge,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.log(`✅ Transaction created: ${transaction.id} (${requiresApproval ? 'requires approval' : 'auto-executing'})`);
+      this.logger.log(
+        `✅ Transaction created: ${transaction.id} (${requiresApproval ? "requires approval" : "auto-executing"})`,
+      );
 
       return {
         transactionId: transaction.id,
         requiresApproval,
         thresholdScheme,
-        challenge: challenge ? {
-          challengeHash: challenge.challengeHash,
-          expiresAt: challenge.expiresAt,
-          transactionData: challenge.challengeData
-        } : undefined
+        challenge: challenge
+          ? {
+              challengeHash: challenge.challengeHash,
+              expiresAt: challenge.expiresAt,
+              transactionData: challenge.challengeData,
+            }
+          : undefined,
       };
-
     } catch (error) {
       await this.auditService.logTransaction(
         userId,
-        'unknown',
-        'creation_failed',
-        'failure',
+        "unknown",
+        "creation_failed",
+        "failure",
         {
           error: error.message,
           amount: request.amount,
           toAddress: request.toAddress,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
-      
-      this.logger.error('❌ Transaction creation failed:', error.message);
+
+      this.logger.error("❌ Transaction creation failed:", error.message);
       throw error;
     }
   }
@@ -188,7 +220,7 @@ export class TransactionService {
   async approveTransaction(
     approval: TransactionApprovalRequest,
     ipAddress: string,
-    userAgent: string
+    userAgent: string,
   ): Promise<{
     approved: boolean;
     signature?: string;
@@ -196,9 +228,11 @@ export class TransactionService {
     remainingApprovals: number;
   }> {
     const startTime = Date.now();
-    
+
     try {
-      this.logger.log(`✅ Processing approval for transaction: ${approval.transactionId} by guardian: ${approval.guardianId}`);
+      this.logger.log(
+        `✅ Processing approval for transaction: ${approval.transactionId} by guardian: ${approval.guardianId}`,
+      );
 
       // 1. Get transaction and validate
       const transaction = await this.database.transaction.findUnique({
@@ -206,65 +240,72 @@ export class TransactionService {
         include: {
           fromWallet: true,
           approvals: {
-            include: { guardian: true }
+            include: { guardian: true },
           },
-          challenge: true
-        }
+          challenge: true,
+        },
       });
 
       if (!transaction) {
-        throw new Error('Transaction not found');
+        throw new Error("Transaction not found");
       }
 
-      if (transaction.status !== 'AWAITING_APPROVAL') {
-        throw new Error('Transaction not awaiting approval');
+      if (transaction.status !== "AWAITING_APPROVAL") {
+        throw new Error("Transaction not awaiting approval");
       }
 
       // 2. Check if guardian already approved
-      const existingApproval = transaction.approvals.find(a => a.guardianId === approval.guardianId);
+      const existingApproval = transaction.approvals.find(
+        (a) => a.guardianId === approval.guardianId,
+      );
       if (existingApproval) {
-        throw new Error('Guardian already approved this transaction');
+        throw new Error("Guardian already approved this transaction");
       }
 
       // 3. Validate guardian and their limits
-      const guardian = await this.guardianService.getGuardianById(approval.guardianId);
+      const guardian = await this.guardianService.getGuardianById(
+        approval.guardianId,
+      );
       if (!guardian || !guardian.isActive || !guardian.totpVerified) {
-        throw new Error('Guardian not found, inactive, or not verified');
+        throw new Error("Guardian not found, inactive, or not verified");
       }
 
       // 4. Validate challenge response or TOTP
       let authResult;
-      if (approval.authMethod === 'OCRA_LIKE' && approval.challengeResponse) {
+      if (approval.authMethod === "OCRA_LIKE" && approval.challengeResponse) {
         if (!transaction.challenge) {
-          throw new Error('Challenge not found for transaction');
+          throw new Error("Challenge not found for transaction");
         }
-        
+
         authResult = await this.challengeService.validateChallengeResponse(
           approval.guardianId,
           transaction.challenge.challengeHash,
           approval.challengeResponse,
-          approval.transactionId
+          approval.transactionId,
         );
-      } else if (approval.authMethod === 'TOTP_FALLBACK' && approval.totpCode) {
-        const isValid = await this.guardianService.validateGuardianTOTP(approval.guardianId, approval.totpCode);
+      } else if (approval.authMethod === "TOTP_FALLBACK" && approval.totpCode) {
+        const isValid = await this.guardianService.validateGuardianTOTP(
+          approval.guardianId,
+          approval.totpCode,
+        );
         authResult = {
           valid: isValid,
-          authMethod: 'TOTP_FALLBACK' as const,
-          keyReleaseId: `totp_${crypto.randomBytes(8).toString('hex')}`
+          authMethod: "TOTP_FALLBACK" as const,
+          keyReleaseId: `totp_${crypto.randomBytes(8).toString("hex")}`,
         };
       } else {
-        throw new Error('Invalid authentication method or missing codes');
+        throw new Error("Invalid authentication method or missing codes");
       }
 
       if (!authResult.valid) {
-        throw new Error('Authentication failed');
+        throw new Error("Authentication failed");
       }
 
       // 5. Get HSM signature using TOTP-authorized key release
       const hsmSignature = await this.getHSMSignatureForTransaction(
         guardian,
         transaction,
-        authResult.keyReleaseId!
+        authResult.keyReleaseId!,
       );
 
       // 6. Create approval record
@@ -284,8 +325,8 @@ export class TransactionService {
           keyReleaseId: authResult.keyReleaseId,
           isValid: true,
           ipAddress,
-          userAgent
-        }
+          userAgent,
+        },
       });
 
       // 7. Update guardian approval count
@@ -293,31 +334,35 @@ export class TransactionService {
         where: { id: approval.guardianId },
         data: {
           totalApprovals: { increment: 1 },
-          lastApprovalAt: new Date()
-        }
+          lastApprovalAt: new Date(),
+        },
       });
 
       // 8. Check if we have enough approvals to execute
       const currentApprovals = await this.database.approval.count({
         where: {
           transactionId: approval.transactionId,
-          isValid: true
-        }
+          isValid: true,
+        },
       });
 
       const executionReady = currentApprovals >= transaction.requiredApprovals;
 
       // 9. Execute transaction with ephemeral key if ready
       if (executionReady) {
-        await this.executeTransactionWithEphemeralKey(approval.transactionId, approval.guardianId);
+        await this.executeTransactionWithEphemeralKey(
+          approval.transactionId,
+          approval.guardianId,
+          authResult.keyReleaseId,
+        );
       }
 
       // Audit log
       await this.auditService.logTransaction(
         approval.guardianId,
         approval.transactionId,
-        'approved',
-        'success',
+        "approved",
+        "success",
         {
           authMethod: approval.authMethod,
           hsmPartitionUsed: guardian.user.hsmPartitionId,
@@ -325,33 +370,34 @@ export class TransactionService {
           currentApprovals,
           requiredApprovals: transaction.requiredApprovals,
           executionReady,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.log(`✅ Transaction approved by ${guardian.role}: ${approval.transactionId} (${currentApprovals}/${transaction.requiredApprovals})`);
+      this.logger.log(
+        `✅ Transaction approved by ${guardian.role}: ${approval.transactionId} (${currentApprovals}/${transaction.requiredApprovals})`,
+      );
 
       return {
         approved: true,
         signature: hsmSignature,
         executionReady,
-        remainingApprovals: transaction.requiredApprovals - currentApprovals
+        remainingApprovals: transaction.requiredApprovals - currentApprovals,
       };
-
     } catch (error) {
       await this.auditService.logTransaction(
         approval.guardianId,
         approval.transactionId,
-        'approval_failed',
-        'failure',
+        "approval_failed",
+        "failure",
         {
           error: error.message,
           authMethod: approval.authMethod,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
-      
-      this.logger.error('❌ Transaction approval failed:', error.message);
+
+      this.logger.error("❌ Transaction approval failed:", error.message);
       throw error;
     }
   }
@@ -361,42 +407,45 @@ export class TransactionService {
   /**
    * Determine threshold scheme based on amount and wallet type
    */
-  private async determineThresholdScheme(amount: string, walletType: 'HOT' | 'COLD'): Promise<ThresholdConfiguration> {
+  private async determineThresholdScheme(
+    amount: string,
+    walletType: "HOT" | "COLD",
+  ): Promise<ThresholdConfiguration> {
     const amountNum = parseFloat(amount);
-    
+
     // Cold wallet always requires 3-of-3
-    if (walletType === 'COLD') {
+    if (walletType === "COLD") {
       return {
-        type: 'CRITICAL_3_OF_3',
+        type: "CRITICAL_3_OF_3",
         threshold: 3,
         totalParties: 3,
-        challengeRequired: true
+        challengeRequired: true,
       };
     }
-    
+
     // Hot wallet threshold based on amount
     if (amountNum < 1000) {
       return {
-        type: 'LOW_VALUE_2_OF_3',
+        type: "LOW_VALUE_2_OF_3",
         threshold: 2,
         totalParties: 3,
         challengeRequired: false,
-        maxAmount: 1000
+        maxAmount: 1000,
       };
     } else if (amountNum < 10000) {
       return {
-        type: 'HIGH_VALUE_2_OF_3',
+        type: "HIGH_VALUE_2_OF_3",
         threshold: 2,
         totalParties: 3,
         challengeRequired: true,
-        maxAmount: 10000
+        maxAmount: 10000,
       };
     } else {
       return {
-        type: 'CRITICAL_3_OF_3',
+        type: "CRITICAL_3_OF_3",
         threshold: 3,
         totalParties: 3,
-        challengeRequired: true
+        challengeRequired: true,
       };
     }
   }
@@ -404,15 +453,20 @@ export class TransactionService {
   /**
    * Check if transaction requires guardian approval
    */
-  private requiresApproval(amount: string, walletType: 'HOT' | 'COLD'): boolean {
+  private requiresApproval(
+    amount: string,
+    walletType: "HOT" | "COLD",
+  ): boolean {
     const amountNum = parseFloat(amount);
-    const threshold = parseFloat(this.configService.get('HIGH_VALUE_THRESHOLD', '1000'));
-    
+    const threshold = parseFloat(
+      this.configService.get("HIGH_VALUE_THRESHOLD", "1000"),
+    );
+
     // Cold wallet always requires approval
-    if (walletType === 'COLD') {
+    if (walletType === "COLD") {
       return true;
     }
-    
+
     // Hot wallet requires approval for high-value transactions
     return amountNum >= threshold;
   }
@@ -420,25 +474,27 @@ export class TransactionService {
   /**
    * Validate transaction request
    */
-  private async validateTransactionRequest(request: TransactionCreationRequest): Promise<void> {
+  private async validateTransactionRequest(
+    request: TransactionCreationRequest,
+  ): Promise<void> {
     // Validate amount
     const amount = parseFloat(request.amount);
     if (amount <= 0) {
-      throw new Error('Amount must be positive');
+      throw new Error("Amount must be positive");
     }
 
     if (amount > 1000000) {
-      throw new Error('Amount exceeds maximum limit');
+      throw new Error("Amount exceeds maximum limit");
     }
 
     // Validate Stellar address
     if (!/^G[A-Z2-7]{55}$/.test(request.toAddress)) {
-      throw new Error('Invalid Stellar address format');
+      throw new Error("Invalid Stellar address format");
     }
 
     // Validate memo
     if (request.memo && request.memo.length > 28) {
-      throw new Error('Memo too long (max 28 characters)');
+      throw new Error("Memo too long (max 28 characters)");
     }
   }
 
@@ -448,24 +504,24 @@ export class TransactionService {
   private async getHSMSignatureForTransaction(
     guardian: any,
     transaction: any,
-    keyReleaseId: string
+    keyReleaseId: string,
   ): Promise<string> {
     try {
       // Build raw transaction data
       const rawTransaction = this.buildRawTransactionData(transaction);
-      
+
       // Get HSM signature using TOTP-authorized key release
-      const signatureResult = await this.hsmService.authorizeKeyReleaseAndSign(
-        guardian.user.hsmPartitionId,
-        guardian.user.hsmKeyName,
-        '123456', // This would be the validated TOTP/challenge code
+      const signatureResult = await this.hsmService.authorizeKeyReleaseAndSign({
+        partitionId: guardian.user.hsmPartitionId,
+        keyId: guardian.user.hsmKeyName,
         rawTransaction,
-        guardian.id
-      );
+        guardianId: guardian.id,
+        releaseId: keyReleaseId,
+      });
 
       return signatureResult.signature;
     } catch (error) {
-      this.logger.error('❌ HSM signature failed:', error.message);
+      this.logger.error("❌ HSM signature failed:", error.message);
       throw error;
     }
   }
@@ -481,31 +537,37 @@ export class TransactionService {
       amount: transaction.amount.toString(),
       memo: transaction.memo,
       sequence: Date.now(), // In production, get actual sequence from Stellar
-      fee: '10000', // Base fee in stroops
-      networkPassphrase: this.configService.get('STELLAR_NETWORK_PASSPHRASE')
+      fee: "10000", // Base fee in stroops
+      networkPassphrase: this.configService.get("STELLAR_NETWORK_PASSPHRASE"),
     };
 
     // Convert to hex string for HSM signing
-    return Buffer.from(JSON.stringify(txData)).toString('hex');
+    return Buffer.from(JSON.stringify(txData)).toString("hex");
   }
 
   /**
    * Execute transaction with ephemeral key (complete privacy protection)
    * Following transaction-privacy.mdc: "a transacional ela vai fazer a transação morre aquela chave"
    */
-  private async executeTransactionWithEphemeralKey(transactionId: string, guardianId: string): Promise<void> {
+  private async executeTransactionWithEphemeralKey(
+    transactionId: string,
+    guardianId: string,
+    keyReleaseId?: string,
+  ): Promise<void> {
     const startTime = Date.now();
-    
+
     try {
-      this.logger.log(`🚀 Executing transaction with ephemeral key: ${transactionId}`);
+      this.logger.log(
+        `🚀 Executing transaction with ephemeral key: ${transactionId}`,
+      );
 
       // Update status to executing
       await this.database.transaction.update({
         where: { id: transactionId },
-        data: { 
-          status: 'EXECUTING',
-          executedAt: new Date()
-        }
+        data: {
+          status: "EXECUTING",
+          executedAt: new Date(),
+        },
       });
 
       // Get transaction with ephemeral key
@@ -515,100 +577,114 @@ export class TransactionService {
           fromWallet: true,
           TransactionKey: true,
           approvals: {
-            include: { guardian: true }
-          }
-        }
+            include: { guardian: true },
+          },
+        },
       });
 
       if (!transaction) {
-        throw new Error('Transaction not found');
+        throw new Error("Transaction not found");
       }
 
       if (!transaction.TransactionKey) {
-        throw new Error('Ephemeral transaction key not found');
+        throw new Error("Ephemeral transaction key not found");
       }
 
       // Build raw transaction data for Stellar network
-      const rawTransactionData = this.buildRawTransactionDataWithEphemeralKey(transaction);
+      const rawTransactionData =
+        this.buildRawTransactionDataWithEphemeralKey(transaction);
 
       // Use ephemeral key for signing (ONE-TIME USE)
       // Following: "É como se eu estivesse criando uma nova conta para cada transação"
       const ephemeralSignature = await this.transactionKeyService.useEphemeralKeyForSigning(
         transactionId,
-        '123456', // Mock TOTP (in production: from guardian approval)
+        undefined,
         guardianId,
-        rawTransactionData
+        rawTransactionData,
+        keyReleaseId,
       );
 
-      this.logger.log(`✅ Transaction signed with ephemeral address: ${ephemeralSignature.ephemeralAddress}`);
-      this.logger.log(`💀 Ephemeral key destroyed: ${ephemeralSignature.keyDestroyed}`);
-      this.logger.log(`🛡️ Privacy protection: Transaction appears from "random" address`);
+      this.logger.log(
+        `✅ Transaction signed with ephemeral address: ${ephemeralSignature.ephemeralAddress}`,
+      );
+      this.logger.log(
+        `💀 Ephemeral key destroyed: ${ephemeralSignature.keyDestroyed}`,
+      );
+      this.logger.log(
+        `🛡️ Privacy protection: Transaction appears from "random" address`,
+      );
 
       // Submit transaction to Stellar network (from ephemeral address)
       const stellarHash = await this.submitToStellarNetwork(
         rawTransactionData,
         ephemeralSignature.signature,
-        ephemeralSignature.ephemeralAddress
+        ephemeralSignature.ephemeralAddress,
       );
 
       // Update transaction with success status
       await this.database.transaction.update({
         where: { id: transactionId },
-        data: { 
-          status: 'SUCCESS',
+        data: {
+          status: "SUCCESS",
           stellarHash: stellarHash,
-          executedAt: new Date()
-        }
+          executedAt: new Date(),
+        },
       });
 
       // Release reserved balance
       await this.walletService.releaseReservedBalance(
         transaction.fromWalletId,
-        transaction.amount.toString()
+        transaction.amount.toString(),
       );
 
       // Audit log - transaction executed with privacy protection
       await this.auditService.logTransaction(
         guardianId,
         transactionId,
-        'executed_with_ephemeral_key',
-        'success',
+        "executed_with_ephemeral_key",
+        "success",
         {
           ephemeralAddress: ephemeralSignature.ephemeralAddress,
           stellarHash: stellarHash,
           privacyProtected: true,
           keyDestroyed: ephemeralSignature.keyDestroyed,
           correlationImpossible: true,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.log(`✅ Transaction executed with complete privacy protection: ${stellarHash}`);
-      this.logger.log(`🔍 External analysis will see: Random address → ${transaction.toAddress}`);
-
+      this.logger.log(
+        `✅ Transaction executed with complete privacy protection: ${stellarHash}`,
+      );
+      this.logger.log(
+        `🔍 External analysis will see: Random address → ${transaction.toAddress}`,
+      );
     } catch (error) {
       // Update status to failed
       await this.database.transaction.update({
         where: { id: transactionId },
-        data: { 
-          status: 'FAILED',
-          errorMessage: error.message
-        }
+        data: {
+          status: "FAILED",
+          errorMessage: error.message,
+        },
       });
 
       // Audit log failure
       await this.auditService.logTransaction(
         guardianId,
         transactionId,
-        'execution_with_ephemeral_key_failed',
-        'failure',
+        "execution_with_ephemeral_key_failed",
+        "failure",
         {
           error: error.message,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.error('❌ Transaction execution with ephemeral key failed:', error.message);
+      this.logger.error(
+        "❌ Transaction execution with ephemeral key failed:",
+        error.message,
+      );
       throw error;
     }
   }
@@ -624,16 +700,16 @@ export class TransactionService {
       amount: transaction.amount.toString(),
       memo: transaction.memo,
       sequence: Date.now(),
-      fee: '10000',
-      networkPassphrase: this.configService.get('STELLAR_NETWORK_PASSPHRASE'),
-      
+      fee: "10000",
+      networkPassphrase: this.configService.get("STELLAR_NETWORK_PASSPHRASE"),
+
       // Privacy metadata
       ephemeral: true,
       derivationPath: transaction.TransactionKey.derivationPath,
-      privacyProtected: true
+      privacyProtected: true,
     };
 
-    return Buffer.from(JSON.stringify(txData)).toString('hex');
+    return Buffer.from(JSON.stringify(txData)).toString("hex");
   }
 
   /**
@@ -642,18 +718,22 @@ export class TransactionService {
   private async submitToStellarNetwork(
     rawTransactionData: string,
     signature: string,
-    ephemeralAddress: string
+    ephemeralAddress: string,
   ): Promise<string> {
     try {
-      this.logger.log(`📡 Submitting transaction from ephemeral address: ${ephemeralAddress}`);
+      this.logger.log(
+        `📡 Submitting transaction from ephemeral address: ${ephemeralAddress}`,
+      );
 
       // Mock Stellar network submission
       // In production: Use StellarService to submit signed transaction
-      const stellarHash = `stellar_ephemeral_${crypto.randomBytes(32).toString('hex')}`;
+      const stellarHash = `stellar_ephemeral_${crypto.randomBytes(32).toString("hex")}`;
 
       this.logger.log(`✅ Transaction submitted to Stellar: ${stellarHash}`);
-      this.logger.log(`🔍 Stellar Explorer will show: ${ephemeralAddress} → destination`);
-      
+      this.logger.log(
+        `🔍 Stellar Explorer will show: ${ephemeralAddress} → destination`,
+      );
+
       return stellarHash;
     } catch (error) {
       throw new Error(`Stellar network submission failed: ${error.message}`);
@@ -663,9 +743,11 @@ export class TransactionService {
   /**
    * Legacy method - kept for backwards compatibility
    */
-  private async executeTransactionInternal(transactionId: string): Promise<void> {
+  private async executeTransactionInternal(
+    transactionId: string,
+  ): Promise<void> {
     // Redirect to ephemeral key execution for privacy
-    await this.executeTransactionWithEphemeralKey(transactionId, 'system');
+    await this.executeTransactionWithEphemeralKey(transactionId, "system");
   }
 
   // ==================== TRANSACTION QUERIES ====================
@@ -683,46 +765,46 @@ export class TransactionService {
               id: true,
               publicKey: true,
               walletType: true,
-              derivationPath: true
-            }
+              derivationPath: true,
+            },
           },
           user: {
             select: {
               id: true,
               name: true,
-              email: true
-            }
+              email: true,
+            },
           },
           approvals: {
             include: {
               guardian: {
                 select: {
                   id: true,
-                  role: true
-                }
-              }
+                  role: true,
+                },
+              },
             },
-            orderBy: { validatedAt: 'asc' }
+            orderBy: { validatedAt: "asc" },
           },
           challenge: true,
           // Include ephemeral transaction key for privacy tracking
           TransactionKey: {
             select: {
               id: true,
-              publicKey: true,        // Ephemeral address used
-              derivationPath: true,   // m/0'/0'/N'
+              publicKey: true, // Ephemeral address used
+              derivationPath: true, // m/0'/0'/N'
               transactionIndex: true,
               isUsed: true,
               isExpired: true,
               destroyedAt: true,
               expiresAt: true,
-              createdAt: true
-            }
-          }
-        }
+              createdAt: true,
+            },
+          },
+        },
       });
     } catch (error) {
-      this.logger.error('❌ Failed to get transaction:', error.message);
+      this.logger.error("❌ Failed to get transaction:", error.message);
       throw error;
     }
   }
@@ -734,44 +816,44 @@ export class TransactionService {
     try {
       return await this.database.transaction.findMany({
         where: {
-          status: 'AWAITING_APPROVAL',
+          status: "AWAITING_APPROVAL",
           approvals: {
             none: {
-              guardianId: guardianId
-            }
-          }
+              guardianId: guardianId,
+            },
+          },
         },
         include: {
           fromWallet: {
             select: {
               publicKey: true,
-              walletType: true
-            }
+              walletType: true,
+            },
           },
           approvals: {
             include: {
               guardian: {
                 select: {
-                  role: true
-                }
-              }
-            }
+                  role: true,
+                },
+              },
+            },
           },
           challenge: true,
           // Include ephemeral transaction key info
           TransactionKey: {
             select: {
-              publicKey: true,        // Ephemeral address
-              derivationPath: true,   // m/0'/0'/N'
+              publicKey: true, // Ephemeral address
+              derivationPath: true, // m/0'/0'/N'
               expiresAt: true,
-              isUsed: true
-            }
-          }
+              isUsed: true,
+            },
+          },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" },
       });
     } catch (error) {
-      this.logger.error('❌ Failed to get pending approvals:', error.message);
+      this.logger.error("❌ Failed to get pending approvals:", error.message);
       throw error;
     }
   }
@@ -788,29 +870,32 @@ export class TransactionService {
         failedTransactions,
         totalVolume,
         ephemeralKeyStats,
-        privacyProtectedTransactions
+        privacyProtectedTransactions,
       ] = await Promise.all([
         this.database.transaction.count(),
-        this.database.transaction.count({ where: { status: 'AWAITING_APPROVAL' } }),
-        this.database.transaction.count({ where: { status: 'SUCCESS' } }),
-        this.database.transaction.count({ where: { status: 'FAILED' } }),
+        this.database.transaction.count({
+          where: { status: "AWAITING_APPROVAL" },
+        }),
+        this.database.transaction.count({ where: { status: "SUCCESS" } }),
+        this.database.transaction.count({ where: { status: "FAILED" } }),
         this.database.transaction.aggregate({
-          where: { status: 'SUCCESS' },
-          _sum: { amount: true }
+          where: { status: "SUCCESS" },
+          _sum: { amount: true },
         }),
         this.transactionKeyService.getEphemeralKeyStats(),
         this.database.transaction.count({
           where: {
             TransactionKey: {
-              isNot: null
-            }
-          }
-        })
+              isNot: null,
+            },
+          },
+        }),
       ]);
 
-      const privacyScore = totalTransactions > 0 
-        ? (privacyProtectedTransactions / totalTransactions) * 100 
-        : 100;
+      const privacyScore =
+        totalTransactions > 0
+          ? (privacyProtectedTransactions / totalTransactions) * 100
+          : 100;
 
       return {
         transactions: {
@@ -818,10 +903,13 @@ export class TransactionService {
           pending: pendingApprovals,
           successful: successfulTransactions,
           failed: failedTransactions,
-          successRate: totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0
+          successRate:
+            totalTransactions > 0
+              ? (successfulTransactions / totalTransactions) * 100
+              : 0,
         },
         volume: {
-          total: totalVolume._sum.amount?.toString() || '0'
+          total: totalVolume._sum.amount?.toString() || "0",
         },
         privacy: {
           ephemeralKeysGenerated: ephemeralKeyStats.total,
@@ -829,11 +917,12 @@ export class TransactionService {
           ephemeralKeysDestroyed: ephemeralKeyStats.expired,
           privacyScore: Math.round(privacyScore * 100) / 100,
           privacyProtectedTransactions: privacyProtectedTransactions,
-          correlationProtection: privacyScore > 80 ? 'EXCELLENT' : 'NEEDS_IMPROVEMENT'
-        }
+          correlationProtection:
+            privacyScore > 80 ? "EXCELLENT" : "NEEDS_IMPROVEMENT",
+        },
       };
     } catch (error) {
-      this.logger.error('❌ Failed to get transaction stats:', error.message);
+      this.logger.error("❌ Failed to get transaction stats:", error.message);
       throw error;
     }
   }
@@ -844,32 +933,30 @@ export class TransactionService {
   async getTransactionPrivacyReport(userId?: string) {
     try {
       const where = userId ? { userId } : {};
-      
-      const [
-        totalTransactions,
-        ephemeralTransactions,
-        uniqueAddressesUsed
-      ] = await Promise.all([
-        this.database.transaction.count({ where }),
-        this.database.transaction.count({
-          where: {
-            ...where,
-            TransactionKey: { isNot: null }
-          }
-        }),
-        this.database.transactionKey.findMany({
-          where: {
-            isUsed: true,
-            transaction: { ...where }
-          },
-          select: { publicKey: true },
-          distinct: ['publicKey']
-        })
-      ]);
 
-      const privacyCompliance = totalTransactions > 0 
-        ? (ephemeralTransactions / totalTransactions) * 100 
-        : 100;
+      const [totalTransactions, ephemeralTransactions, uniqueAddressesUsed] =
+        await Promise.all([
+          this.database.transaction.count({ where }),
+          this.database.transaction.count({
+            where: {
+              ...where,
+              TransactionKey: { isNot: null },
+            },
+          }),
+          this.database.transactionKey.findMany({
+            where: {
+              isUsed: true,
+              transaction: { ...where },
+            },
+            select: { publicKey: true },
+            distinct: ["publicKey"],
+          }),
+        ]);
+
+      const privacyCompliance =
+        totalTransactions > 0
+          ? (ephemeralTransactions / totalTransactions) * 100
+          : 100;
 
       return {
         summary: {
@@ -877,32 +964,40 @@ export class TransactionService {
           ephemeralTransactions,
           uniqueAddressesGenerated: uniqueAddressesUsed.length,
           privacyCompliance: Math.round(privacyCompliance * 100) / 100,
-          correlationRisk: privacyCompliance > 95 ? 'LOW' : privacyCompliance > 80 ? 'MEDIUM' : 'HIGH'
+          correlationRisk:
+            privacyCompliance > 95
+              ? "LOW"
+              : privacyCompliance > 80
+                ? "MEDIUM"
+                : "HIGH",
         },
         privacy: {
           addressReuse: totalTransactions - uniqueAddressesUsed.length,
           correlationPrevention: ephemeralTransactions,
           privacyBenefits: [
-            'External observers cannot correlate transactions',
-            'Each transaction appears from random address',
-            'Wallet balances cannot be traced',
-            'Transaction patterns are hidden',
-            'Complete financial privacy protection'
-          ]
+            "External observers cannot correlate transactions",
+            "Each transaction appears from random address",
+            "Wallet balances cannot be traced",
+            "Transaction patterns are hidden",
+            "Complete financial privacy protection",
+          ],
         },
-        recommendations: privacyCompliance < 95 ? [
-          '🔧 Ensure all transactions use ephemeral keys',
-          '🔍 Monitor ephemeral key generation',
-          '⏰ Verify key expiry and destruction',
-          '🛡️ Review privacy protection settings'
-        ] : [
-          '✅ Excellent privacy protection maintained',
-          '🎯 All transactions using ephemeral keys',
-          '🛡️ Complete correlation prevention active'
-        ]
+        recommendations:
+          privacyCompliance < 95
+            ? [
+                "🔧 Ensure all transactions use ephemeral keys",
+                "🔍 Monitor ephemeral key generation",
+                "⏰ Verify key expiry and destruction",
+                "🛡️ Review privacy protection settings",
+              ]
+            : [
+                "✅ Excellent privacy protection maintained",
+                "🎯 All transactions using ephemeral keys",
+                "🛡️ Complete correlation prevention active",
+              ],
       };
     } catch (error) {
-      this.logger.error('❌ Failed to get privacy report:', error.message);
+      this.logger.error("❌ Failed to get privacy report:", error.message);
       throw error;
     }
   }
