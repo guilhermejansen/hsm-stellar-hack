@@ -88,7 +88,7 @@ export default function VerifyTOTPPage() {
             </div>
             <div className="flex items-start space-x-2">
               <span className="bg-stellar-100 text-stellar-700 rounded px-1.5 py-0.5 text-xs font-medium">2</span>
-              <span>Find "Stellar Custody MVP" in your authenticator</span>
+              <span>Find "Stellar Custody" in your authenticator</span>
             </div>
             <div className="flex items-start space-x-2">
               <span className="bg-stellar-100 text-stellar-700 rounded px-1.5 py-0.5 text-xs font-medium">3</span>
