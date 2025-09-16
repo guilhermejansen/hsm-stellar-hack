@@ -2,9 +2,10 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios, { AxiosInstance } from "axios";
 import * as crypto from "crypto";
-import { StrKey } from "@stellar/stellar-sdk";
+import { StrKey, Keypair } from "@stellar/stellar-sdk";
 
 import { AuditService } from "../common/audit.service";
+import { EncryptionService } from "../common/encryption.service";
 import {
   HSMConfig,
   HSMPartitionInfo,
@@ -34,10 +35,28 @@ export class HSMService implements OnModuleInit {
   private readonly logger = new Logger(HSMService.name);
   private hsmClient: AxiosInstance;
   private readonly config: HSMConfig;
+  private readonly mockEnabled: boolean;
+
+  // ===== Mock HSM in-memory stores (development) =====
+  private mockPartitions = new Map<string, Buffer>(); // partitionId -> master seed (32 bytes)
+  private mockKeys = new Map<string, Buffer>(); // keyId -> ed25519 seed (32 bytes)
+  private mockEphemeral = new Map<
+    string,
+    {
+      seed: Buffer;
+      partitionId: string;
+      parentKeyId: string;
+      derivationPath: string;
+      expiresAt: Date;
+      oneTimeUse: boolean;
+      used: boolean;
+    }
+  >();
 
   constructor(
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly encryption: EncryptionService,
   ) {
     // Load HSM configuration from environment
     this.config = {
@@ -48,6 +67,7 @@ export class HSMService implements OnModuleInit {
       partition: this.configService.get("HSM_PARTITION", "DEMO"),
       timeout: parseInt(this.configService.get("HSM_TIMEOUT", "30000")),
     };
+    this.mockEnabled = this.configService.get("MOCK_HSM", "false") === "true";
   }
 
   async onModuleInit() {
@@ -82,8 +102,7 @@ export class HSMService implements OnModuleInit {
    */
   private async testConnection(): Promise<void> {
     try {
-      // Mock HSM API call for testing
-      // In production, this would be actual HSM API
+      // Mock or real HSM connectivity validation
       this.logger.log("🔍 Testing HSM connection...");
 
       // For now, just validate configuration
@@ -143,7 +162,7 @@ export class HSMService implements OnModuleInit {
         `stellar_master_${userId.substring(0, 8)}`,
       );
 
-      // 7. Encrypt PII with AES key using Svault Module (mock)
+      // 7. Encrypt PII with AES key using Svault Module (mock -> AES-GCM via EncryptionService)
       const encryptedPII = await this.svaultEncrypt(
         aesKeyId,
         JSON.stringify(pii),
@@ -191,11 +210,15 @@ export class HSMService implements OnModuleInit {
     try {
       this.logger.log(`🔐 Creating HSM partition: ${partitionId}`);
 
-      // Mock HSM partition creation
-      // In production: await this.hsmClient.post('/partitions', { partitionId, ...config })
-
-      // Simulate partition creation delay
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (this.mockEnabled) {
+        // Create a master seed for this partition (32 bytes)
+        const seed = crypto.randomBytes(32);
+        this.mockPartitions.set(partitionId, seed);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } else {
+        // TODO: Real HSM partition creation API call
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
       this.logger.log(`✅ HSM partition created: ${partitionId}`);
     } catch (error) {
@@ -213,9 +236,8 @@ export class HSMService implements OnModuleInit {
     try {
       this.logger.log(`🔑 Generating AES256 key: ${keyLabel}`);
 
-      // Mock AES key generation
-      // In production: HSM API call to generate AES256 key
       const aesKeyId = `aes_${crypto.randomBytes(16).toString("hex")}`;
+      // In a real HSM, this key would be internal. Here we only emit an ID.
 
       this.logger.log(`✅ AES256 key generated: ${aesKeyId}`);
       return aesKeyId;
@@ -234,9 +256,18 @@ export class HSMService implements OnModuleInit {
     try {
       this.logger.log(`🔑 Generating BIP32 Edwards XPRIV: ${keyLabel}`);
 
-      // Mock BIP32 key generation
-      // In production: HSM API call to generate BIP32 Edwards key
       const masterKeyId = `bip32_${crypto.randomBytes(16).toString("hex")}`;
+
+      if (this.mockEnabled) {
+        const partitionSeed = this.mockPartitions.get(partitionId);
+        if (!partitionSeed) throw new Error("Partition not found");
+
+        // Derive a 32-byte seed deterministically for this label
+        const seed = this.kdf(partitionSeed, `MASTER:${keyLabel}`);
+        this.mockKeys.set(masterKeyId, seed);
+      } else {
+        // TODO: Real HSM API to generate BIP32 Edwards key and store handle
+      }
 
       this.logger.log(`✅ BIP32 key generated: ${masterKeyId}`);
       return masterKeyId;
@@ -250,16 +281,9 @@ export class HSMService implements OnModuleInit {
    */
   private async svaultEncrypt(aesKeyId: string, data: string): Promise<string> {
     try {
-      this.logger.log(`🔐 Encrypting PII with Svault Module`);
-
-      // Mock Svault encryption
-      // In production: HSM Svault Module API call
-      const encrypted = crypto
-        .createHash("sha256")
-        .update(data + aesKeyId)
-        .digest("hex");
-
-      return `svault_${encrypted}`;
+      this.logger.log(`🔐 Encrypting PII with Svault Module (AES-GCM)`);
+      // Use app EncryptionService to simulate HSM Svault AES-GCM encryption
+      return this.encryption.encrypt(data);
     } catch (error) {
       throw new Error(`Svault encryption failed: ${error.message}`);
     }
@@ -361,21 +385,30 @@ export class HSMService implements OnModuleInit {
         `🔑 Deriving key: ${params.derivationPath} for ${params.purpose}`,
       );
 
-      // Mock BIP32 key derivation
-      // In production: HSM API call for BIP32 derivation
-      const derivedKeyId = `derived_${crypto.randomBytes(16).toString("hex")}`;
+      const derivedKeyId = `derived_${crypto
+        .createHash("sha256")
+        .update(params.parentKeyId + ":" + params.derivationPath)
+        .digest("hex")}`;
 
-      // Generate mock Ed25519 public key for Stellar
-      const mockPublicKey = StrKey.encodeEd25519PublicKey(
-        crypto.randomBytes(32),
-      );
+      let publicKey: string;
+      if (this.mockEnabled) {
+        const parentSeed = this.mockKeys.get(params.parentKeyId);
+        if (!parentSeed) throw new Error("Parent key seed not found");
+        const seed = this.kdf(parentSeed, params.derivationPath);
+        this.mockKeys.set(derivedKeyId, seed);
+        const kp = Keypair.fromRawEd25519Seed(seed);
+        publicKey = kp.publicKey();
+      } else {
+        // TODO: Real HSM BIP32 derivation
+        publicKey = StrKey.encodeEd25519PublicKey(crypto.randomBytes(32));
+      }
 
       const keyInfo: HSMKeyInfo = {
         keyId: derivedKeyId,
         keyName: `${params.purpose}_${params.derivationPath.replace(/['/]/g, "_")}`,
         algorithm: "ED25519",
         derivationPath: params.derivationPath,
-        publicKey: mockPublicKey,
+        publicKey,
         partition: params.partition,
       };
 
@@ -433,11 +466,21 @@ export class HSMService implements OnModuleInit {
       }
 
       // 3. HSM signs the raw transaction with released key
+      const dataBuf = /^[0-9a-fA-F]+$/.test(params.rawTransaction)
+        ? Buffer.from(params.rawTransaction, "hex")
+        : Buffer.from(params.rawTransaction, "utf8");
+
+      // Ensure a mock seed exists for direct signing keys if needed
+      if (this.mockEnabled && !this.mockKeys.has(params.keyId)) {
+        const pSeed = this.mockPartitions.get(params.partitionId);
+        if (pSeed) {
+          this.mockKeys.set(params.keyId, this.kdf(pSeed, `DIRECT:${params.keyId}`));
+        }
+      }
+
       const signature = await this.signWithReleasedKey({
         keyId: params.keyId,
-        data: /^[0-9a-fA-F]+$/.test(params.rawTransaction)
-          ? Buffer.from(params.rawTransaction, "hex")
-          : Buffer.from(params.rawTransaction, "utf8"),
+        data: dataBuf,
         algorithm: "ED25519",
         releaseId: effectiveReleaseId,
       });
@@ -528,12 +571,17 @@ export class HSMService implements OnModuleInit {
     try {
       this.logger.log(`✍️ Signing with HSM key: ${request.keyId}`);
 
-      // Mock HSM signature generation
-      // In production: HSM performs Ed25519 signature with released key
-      const mockSignature = crypto.randomBytes(64); // Ed25519 signature is 64 bytes
+      if (this.mockEnabled) {
+        const seed = this.mockKeys.get(request.keyId);
+        if (!seed) throw new Error("Key seed not found for signing");
+        const kp = Keypair.fromRawEd25519Seed(seed);
+        const sig = kp.sign(request.data);
+        this.logger.log(`✅ HSM (mock) signature generated`);
+        return Buffer.from(sig);
+      }
 
-      this.logger.log(`✅ HSM signature generated`);
-      return mockSignature;
+      // TODO: Real HSM signature call
+      throw new Error("Real HSM signing not implemented");
     } catch (error) {
       throw new Error(`HSM signing failed: ${error.message}`);
     }
@@ -568,10 +616,28 @@ export class HSMService implements OnModuleInit {
       // HSM generates ephemeral key with auto-expiry
       const ephemeralKeyId = `ephemeral_tx_${params.transactionIndex}_${crypto.randomBytes(8).toString("hex")}`;
 
-      // Generate mock Ed25519 public key for Stellar (in production: actual HSM derivation)
-      const mockPublicKey = StrKey.encodeEd25519PublicKey(
-        crypto.randomBytes(32),
-      );
+      let publicKey: string;
+      if (this.mockEnabled) {
+        const parentSeed = this.mockKeys.get(params.parentKeyId);
+        if (!parentSeed) throw new Error("Parent key seed not found for ephemeral");
+        const seed = this.kdf(parentSeed, params.derivationPath);
+        const kp = Keypair.fromRawEd25519Seed(seed);
+        publicKey = kp.publicKey();
+        // Store ephemeral seed for one-time signing
+        const expiresAt = new Date(Date.now() + params.expiresIn * 1000);
+        this.mockEphemeral.set(ephemeralKeyId, {
+          seed,
+          partitionId: params.partition,
+          parentKeyId: params.parentKeyId,
+          derivationPath: params.derivationPath,
+          expiresAt,
+          oneTimeUse: params.oneTimeUse,
+          used: false,
+        });
+      } else {
+        // TODO: Real HSM ephemeral derivation
+        publicKey = StrKey.encodeEd25519PublicKey(crypto.randomBytes(32));
+      }
 
       const expiresAt = new Date(Date.now() + params.expiresIn * 1000);
 
@@ -598,7 +664,7 @@ export class HSMService implements OnModuleInit {
 
       return {
         keyId: ephemeralKeyId,
-        publicKey: mockPublicKey,
+        publicKey: publicKey,
         derivationPath: params.derivationPath,
         expiresAt: expiresAt,
         isEphemeral: true,
@@ -644,9 +710,29 @@ export class HSMService implements OnModuleInit {
         }
       }
 
-      // HSM signs with ephemeral key (mock implementation)
-      const signature = crypto.randomBytes(64).toString("hex"); // Ed25519 signature
+      // HSM signs with ephemeral key
+      let signatureHex: string;
       const signedAt = new Date();
+
+      if (this.mockEnabled) {
+        const eph = this.mockEphemeral.get(params.ephemeralKeyId);
+        if (!eph) throw new Error("Ephemeral key not found in HSM");
+        if (eph.oneTimeUse && eph.used) throw new Error("Ephemeral key already used");
+        if (eph.expiresAt < new Date()) throw new Error("Ephemeral key expired");
+
+        const dataBuf = /^[0-9a-fA-F]+$/.test(params.rawTransaction)
+          ? Buffer.from(params.rawTransaction, "hex")
+          : Buffer.from(params.rawTransaction, "utf8");
+        const kp = Keypair.fromRawEd25519Seed(eph.seed);
+        const sig = kp.sign(dataBuf);
+        signatureHex = Buffer.from(sig).toString("hex");
+        // Mark as used
+        eph.used = true;
+        this.mockEphemeral.set(params.ephemeralKeyId, eph);
+      } else {
+        // TODO: Real HSM ephemeral signing
+        throw new Error("Real HSM ephemeral signing not implemented");
+      }
 
       // Mark key as used in HSM (one-time use enforcement)
       this.logger.log(
@@ -673,7 +759,7 @@ export class HSMService implements OnModuleInit {
       );
 
       return {
-        signature: signature,
+        signature: signatureHex,
         keyUsed: true,
         signedAt: signedAt,
       };
@@ -697,9 +783,12 @@ export class HSMService implements OnModuleInit {
     try {
       this.logger.log(`💀 Destroying ephemeral key in HSM: ${params.keyId}`);
 
-      // HSM API call to destroy ephemeral key (mock implementation)
-      // In production: HSM permanently deletes the key from partition
-      const destroyedAt = new Date();
+      let destroyedAt = new Date();
+      if (this.mockEnabled) {
+        this.mockEphemeral.delete(params.keyId);
+      } else {
+        // TODO: Real HSM destroy call
+      }
 
       // Audit key destruction
       await this.auditService.logHSMOperation(
@@ -786,8 +875,13 @@ export class HSMService implements OnModuleInit {
     try {
       this.logger.log(`🔄 Rotating HSM key: ${oldKeyId}`);
 
-      // Mock key rotation
       const newKeyId = `rotated_${crypto.randomBytes(16).toString("hex")}`;
+      if (this.mockEnabled) {
+        const oldSeed = this.mockKeys.get(oldKeyId);
+        if (!oldSeed) throw new Error("Old key not found for rotation");
+        const newSeed = this.kdf(oldSeed, "ROTATE");
+        this.mockKeys.set(newKeyId, newSeed);
+      }
 
       await this.auditService.logHSMOperation(
         "system",
@@ -804,5 +898,11 @@ export class HSMService implements OnModuleInit {
       this.logger.error("❌ Key rotation failed:", error.message);
       throw error;
     }
+  }
+
+  // ==================== MOCK HSM UTILITIES ====================
+  private kdf(parentSeed: Buffer, info: string): Buffer {
+    // Simple KDF: HMAC-SHA256(parentSeed, info) -> 32 bytes
+    return crypto.createHmac("sha256", parentSeed).update(info).digest().subarray(0, 32);
   }
 }
