@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Corporate Theme Enhancements */
+@layer components {
+  .corporate-gradient {
+    @apply bg-gradient-to-br from-corporate-50 via-stellar-50 to-corporate-100;
+  }
+  
+  .corporate-card {
+    @apply bg-white/80 backdrop-blur-sm border border-corporate-200 shadow-lg shadow-corporate-900/5;
+  }
+  
+  .corporate-button {
+    @apply bg-stellar-600 hover:bg-stellar-700 text-white font-medium transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  
+  .corporate-input {
+    @apply border-corporate-300 focus:border-stellar-500 focus:ring-stellar-500/20;
+  }
+  
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-success {
+    @apply bg-success-100 text-success-800 border border-success-200;
+  }
+  
+  .status-warning {
+    @apply bg-warning-100 text-warning-800 border border-warning-200;
+  }
+  
+  .status-error {
+    @apply bg-error-100 text-error-800 border border-error-200;
+  }
+  
+  .status-pending {
+    @apply bg-corporate-100 text-corporate-800 border border-corporate-200;
+  }
+  
+  .guardian-card {
+    @apply corporate-card p-6 hover:shadow-xl transition-all duration-300 hover:scale-[1.02];
+  }
+  
+  .transaction-row {
+    @apply hover:bg-corporate-50/50 transition-colors duration-150 cursor-pointer;
+  }
+  
+  .metric-card {
+    @apply corporate-card p-6 text-center;
+  }
+  
+  .metric-value {
+    @apply text-3xl font-bold text-corporate-900;
+  }
+  
+  .metric-label {
+    @apply text-sm text-corporate-600 font-medium;
+  }
+  
+  .sidebar-nav-item {
+    @apply flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150;
+  }
+  
+  .sidebar-nav-item-active {
+    @apply bg-stellar-100 text-stellar-900 border-r-2 border-stellar-600;
+  }
+  
+  .sidebar-nav-item-inactive {
+    @apply text-corporate-600 hover:bg-corporate-100 hover:text-corporate-900;
+  }
+}
+
+/* Typography Enhancements */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  
+  .corporate-heading {
+    @apply text-corporate-900 font-semibold tracking-tight;
+  }
+  
+  .corporate-subheading {
+    @apply text-corporate-700 font-medium;
+  }
+  
+  .corporate-body {
+    @apply text-corporate-600 leading-relaxed;
+  }
+  
+  .corporate-caption {
+    @apply text-corporate-500 text-sm;
+  }
+}
+
+/* Animation Utilities */
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+  
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Focus and Accessibility */
+@layer base {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-stellar-500 focus:ring-offset-2;
+  }
+  
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+  }
+}
+
+/* Print Styles for Corporate Reports */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-break {
+    page-break-before: always;
+  }
+  
+  .corporate-card {
+    @apply shadow-none border border-gray-300;
+  }
+}
