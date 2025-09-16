@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/common/loading-spinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Shield } from 'lucide-react';
 
 /**
  * Login form schema
