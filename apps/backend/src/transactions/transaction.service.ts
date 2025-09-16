@@ -9,6 +9,7 @@ import { ChallengeService } from "../challenges/challenge.service";
 import { GuardianService } from "../guardians/guardian.service";
 import { WalletService } from "../wallets/wallet.service";
 import { TransactionKeyService } from "../wallets/transaction-key.service";
+import { StellarService } from "../stellar/stellar.service";
 import { AuditService } from "../common/audit.service";
 import {
   TransactionCreationRequest,
@@ -47,6 +48,7 @@ export class TransactionService {
     private readonly guardianService: GuardianService,
     private readonly walletService: WalletService,
     private readonly transactionKeyService: TransactionKeyService,
+    private readonly stellarService: StellarService,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
   ) {}
@@ -590,35 +592,35 @@ export class TransactionService {
         throw new Error("Ephemeral transaction key not found");
       }
 
-      // Build raw transaction data for Stellar network
-      const rawTransactionData =
-        this.buildRawTransactionDataWithEphemeralKey(transaction);
+      // 1) Build unsigned Stellar transaction XDR (real sequence/fees)
+      const unsignedXDR = await this.stellarService.buildTransaction({
+        sourceAddress: transaction.TransactionKey.publicKey,
+        destinationAddress: transaction.toAddress,
+        amount: transaction.amount.toString(),
+        memo: transaction.memo || undefined,
+      });
 
-      // Use ephemeral key for signing (ONE-TIME USE)
-      // Following: "É como se eu estivesse criando uma nova conta para cada transação"
+      // 2) Compute signature base (hash) for HSM signing
+      const txHash = await this.stellarService.getTransactionHash(unsignedXDR);
+
+      // 3) Use ephemeral key for one-time signature
       const ephemeralSignature = await this.transactionKeyService.useEphemeralKeyForSigning(
         transactionId,
         undefined,
         guardianId,
-        rawTransactionData,
+        txHash.toString("hex"),
         keyReleaseId,
       );
 
-      this.logger.log(
-        `✅ Transaction signed with ephemeral address: ${ephemeralSignature.ephemeralAddress}`,
-      );
-      this.logger.log(
-        `💀 Ephemeral key destroyed: ${ephemeralSignature.keyDestroyed}`,
-      );
-      this.logger.log(
-        `🛡️ Privacy protection: Transaction appears from "random" address`,
+      // 4) Attach signature and submit
+      const signedXDR = await this.stellarService.addSignatureToXDR(
+        unsignedXDR,
+        ephemeralSignature.ephemeralAddress,
+        Buffer.from(ephemeralSignature.signature, "hex"),
       );
 
-      // Submit transaction to Stellar network (from ephemeral address)
-      const stellarHash = await this.submitToStellarNetwork(
-        rawTransactionData,
-        ephemeralSignature.signature,
-        ephemeralSignature.ephemeralAddress,
+      const stellarResult = await this.stellarService.submitTransaction(
+        signedXDR,
       );
 
       // Update transaction with success status
@@ -626,7 +628,7 @@ export class TransactionService {
         where: { id: transactionId },
         data: {
           status: "SUCCESS",
-          stellarHash: stellarHash,
+          stellarHash: stellarResult.hash,
           executedAt: new Date(),
         },
       });
@@ -645,7 +647,7 @@ export class TransactionService {
         "success",
         {
           ephemeralAddress: ephemeralSignature.ephemeralAddress,
-          stellarHash: stellarHash,
+          stellarHash: stellarResult.hash,
           privacyProtected: true,
           keyDestroyed: ephemeralSignature.keyDestroyed,
           correlationImpossible: true,
@@ -654,7 +656,7 @@ export class TransactionService {
       );
 
       this.logger.log(
-        `✅ Transaction executed with complete privacy protection: ${stellarHash}`,
+        `✅ Transaction executed with complete privacy protection: ${stellarResult.hash}`,
       );
       this.logger.log(
         `🔍 External analysis will see: Random address → ${transaction.toAddress}`,
