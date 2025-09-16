@@ -10,6 +10,8 @@ import {
   HttpStatus,
   Logger,
 } from "@nestjs/common";
+import * as crypto from "crypto";
+import { Decimal } from "@prisma/client/runtime/library";
 import {
   ApiTags,
   ApiOperation,
@@ -23,6 +25,7 @@ import { TransactionService } from "./transaction.service";
 import { ChallengeService } from "../challenges/challenge.service";
 import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { GuardianService } from "../guardians/guardian.service";
+import { WalletService } from "../wallets/wallet.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { DatabaseService } from "../database/database.service";
 import {
@@ -48,6 +51,7 @@ export class TransactionController {
     private readonly whatsappService: WhatsAppService,
     private readonly guardianService: GuardianService,
     private readonly database: DatabaseService,
+    private readonly walletService: WalletService,
   ) {}
 
   @Post()
@@ -66,10 +70,61 @@ export class TransactionController {
     @Request() req: any,
   ) {
     try {
-      const result = await this.transactionService.createTransaction(
-        req.user.userId,
-        createDto,
+      // 🔧 TEMPORARY SIMPLIFIED VERSION FOR DEBUGGING
+      this.logger.log(`🔧 DEBUG: Creating simplified transaction for ${createDto.amount} XLM`);
+      
+      // 1. Validate wallet exists and has balance
+      const wallet = await this.database.wallet.findUnique({
+        where: { id: createDto.fromWalletId }
+      });
+      if (!wallet) {
+        throw new Error("Source wallet not found");
+      }
+
+      // 2. Check balance using the new auto-sync method
+      const canSend = await this.walletService.canSendAmount(
+        createDto.fromWalletId,
+        createDto.amount,
       );
+      
+      if (!canSend.canSend) {
+        throw new Error(canSend.reason || "Insufficient balance");
+      }
+
+      this.logger.log(`✅ Balance check passed: ${canSend.availableBalance} XLM available`);
+
+      // 3. Create simple transaction record
+      const transaction = await this.database.transaction.create({
+        data: {
+          userId: req.user.userId,
+          fromWalletId: createDto.fromWalletId,
+          toAddress: createDto.toAddress,
+          amount: new Decimal(createDto.amount),
+          memo: createDto.memo,
+          status: "AWAITING_APPROVAL",
+          txType: createDto.txType,
+          requiresApproval: true,
+          requiredApprovals: 2, // Simple 2-of-3
+        },
+      });
+
+      this.logger.log(`✅ Transaction created: ${transaction.id}`);
+
+      // 4. Reserve balance
+      await this.walletService.reserveBalance(createDto.fromWalletId, createDto.amount);
+      this.logger.log(`✅ Balance reserved: ${createDto.amount} XLM`);
+
+      const result = {
+        transactionId: transaction.id,
+        requiresApproval: true,
+        thresholdScheme: {
+          type: "HIGH_VALUE_2_OF_3",
+          required: 2,
+          total: 3,
+          challengeRequired: false,
+          description: "2 of 3 guardians required",
+        },
+      };
 
       if (result.requiresApproval) {
         const guardians = await this.guardianService.getActiveGuardians();
@@ -90,7 +145,7 @@ export class TransactionController {
               guardianPhone: guardian.user.phone,
               transactionId: result.transactionId,
               amount: createDto.amount,
-              challengeHash: result.challenge?.challengeHash || "",
+              challengeHash: "",
               approvalUrl: `http://localhost:3000/approve/${result.transactionId}`,
               guardianRole: guardian.role,
               isColdWallet,
@@ -102,7 +157,7 @@ export class TransactionController {
               guardianPhone: guardian.user.phone,
               transactionId: result.transactionId,
               amount: createDto.amount,
-              challengeHash: result.challenge?.challengeHash || "",
+              challengeHash: "",
               approvalUrl: `http://localhost:3000/approve/${result.transactionId}`,
               guardianRole: guardian.role,
             });
@@ -182,6 +237,136 @@ export class TransactionController {
         message: result.executionReady
           ? "Transaction approved and executed successfully. Success notifications sent!"
           : `Transaction approved. ${result.remainingApprovals} more approval(s) needed.`,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @Get("pending")
+  @ApiOperation({
+    summary: "Get pending transactions for approval",
+    description: `
+      **Get transactions awaiting guardian approval**
+      
+      **Returns:**
+      - Transactions with status AWAITING_APPROVAL
+      - Guardian approval progress
+      - Challenge information if applicable
+      - Privacy protection details
+      
+      **Use Cases:**
+      - Guardian dashboard
+      - Approval workflow
+      - Pending transaction monitoring
+    `,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: "List of pending transactions",
+    schema: {
+      example: {
+        success: true,
+        data: [
+          {
+            id: "cmfmhi0m00001vobrqrz1f24o",
+            fromWallet: {
+              walletType: "HOT",
+              publicKey: "GDXZBVFB4G5FZYGWHTYP2J5PT2XYRTP3Q465WPMWHR2NOMFQC5MNE2SD"
+            },
+            toAddress: "GCMFYTMZJPDS2ECNYBU5XZ4KE5GHMPX7LYOWQII4TC4XRBO5WSAJDPFM",
+            amount: "10.0000000",
+            status: "AWAITING_APPROVAL",
+            txType: "PAYMENT",
+            requiredApprovals: 2,
+            currentApprovals: 0,
+            approvals: [],
+            createdAt: "2025-09-16T11:43:15.095Z"
+          }
+        ],
+        metadata: {
+          count: 1,
+          timestamp: "2025-09-16T12:00:00.000Z"
+        }
+      }
+    }
+  })
+  async getPendingTransactions(@Request() req: any) {
+    try {
+      const pendingTransactions = await this.database.transaction.findMany({
+        where: {
+          status: "AWAITING_APPROVAL"
+        },
+        include: {
+          fromWallet: {
+            select: {
+              id: true,
+              publicKey: true,
+              walletType: true,
+              derivationPath: true,
+            },
+          },
+          approvals: {
+            include: {
+              guardian: {
+                select: {
+                  id: true,
+                  role: true,
+                },
+              },
+            },
+          },
+          challenge: true,
+          TransactionKey: {
+            select: {
+              publicKey: true,
+              derivationPath: true,
+              isUsed: true,
+              isExpired: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return {
+        success: true,
+        data: pendingTransactions.map((tx) => ({
+          id: tx.id,
+          stellarHash: tx.stellarHash,
+          fromWallet: tx.fromWallet,
+          toAddress: tx.toAddress,
+          amount: tx.amount.toString(),
+          status: tx.status,
+          txType: tx.txType,
+          requiredApprovals: tx.requiredApprovals,
+          currentApprovals: tx.approvals.length,
+          approvals: tx.approvals.map((approval) => ({
+            guardianRole: approval.guardian.role,
+            approvedAt: approval.validatedAt.toISOString(),
+          })),
+          challenge: tx.challenge ? {
+            challengeHash: tx.challenge.challengeHash,
+            expiresAt: tx.challenge.expiresAt.toISOString(),
+            isActive: tx.challenge.expiresAt > new Date(),
+          } : null,
+          privacyProtection: tx.TransactionKey
+            ? {
+                ephemeralAddress: tx.TransactionKey.publicKey,
+                derivationPath: tx.TransactionKey.derivationPath,
+                isPrivacyProtected: true,
+                keyDestroyed: tx.TransactionKey.isUsed && tx.TransactionKey.isExpired,
+              }
+            : {
+                isPrivacyProtected: false,
+                warning: "Transaction not using ephemeral key",
+              },
+          createdAt: tx.createdAt.toISOString(),
+        })),
+        metadata: {
+          count: pendingTransactions.length,
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw error;
@@ -437,6 +622,74 @@ export class TransactionController {
             "Complete address isolation",
             "Correlation prevention",
           ],
+        },
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @Get("stats/overview")
+  @ApiOperation({
+    summary: "Get transaction statistics overview",
+    description: `
+      **Comprehensive transaction statistics and metrics**
+      
+      **Includes:**
+      - Total/Pending/Successful/Failed transaction counts
+      - Success rate percentage
+      - Volume metrics
+      - Privacy protection statistics
+      - Ephemeral key usage metrics
+      
+      **Use Cases:**
+      - Dashboard overview
+      - System performance monitoring
+      - Privacy compliance reporting
+      - Operational metrics
+    `,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: "Transaction statistics overview",
+    schema: {
+      example: {
+        success: true,
+        data: {
+          transactions: {
+            total: 247,
+            pending: 3,
+            successful: 240,
+            failed: 4,
+            successRate: 97.17,
+          },
+          volume: {
+            total: "1250000.0000000",
+          },
+          privacy: {
+            ephemeralKeysGenerated: 243,
+            ephemeralKeysUsed: 240,
+            ephemeralKeysDestroyed: 240,
+            privacyScore: 98.38,
+            privacyProtectedTransactions: 240,
+            correlationProtection: "EXCELLENT",
+          },
+        },
+        metadata: {
+          timestamp: "2025-09-14T10:30:00Z",
+        },
+      },
+    },
+  })
+  async getTransactionStats(@Request() req: any) {
+    try {
+      const stats = await this.transactionService.getTransactionStats();
+
+      return {
+        success: true,
+        data: stats,
+        metadata: {
+          timestamp: new Date().toISOString(),
         },
       };
     } catch (error) {
