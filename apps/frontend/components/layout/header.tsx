@@ -97,6 +97,7 @@ export function Header() {
             <span className="text-sm text-corporate-700 dark:text-corporate-300">System:</span>
             {getStatusBadge()}
           </div>
+          </div>
 
           {/* Notifications Center */}
           <NotificationCenter notificationCount={notifications} />
