@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { transactionAPI, privacyAPI } from '@/lib/api';
 import { TransactionStatusBadge, WalletTypeBadge, GuardianRoleBadge } from '@/components/common/status-badge';
 import { PageLoading } from '@/components/common/loading-spinner';
+import { StellarExplorerLink, StellarAddressLink } from '@/components/common/stellar-explorer-link';
 import { formatXLMWithSuffix, formatDate, truncateAddress } from '@/lib/utils';
 import { 
   ArrowLeft, 
@@ -107,18 +108,11 @@ export default function TransactionDetailsPage() {
           </div>
         </div>
         
-        {tx.stellarHash && (
-          <Button variant="outline" asChild>
-            <a 
-              href={`https://stellar.expert/explorer/testnet/tx/${tx.stellarHash}`} 
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              View on Explorer
-            </a>
-          </Button>
-        )}
+        <StellarExplorerLink
+          stellarHash={tx.stellarHash}
+          status={tx.status}
+          variant="default"
+        />
       </div>
 
       {/* Transaction Overview */}
@@ -189,17 +183,24 @@ export default function TransactionDetailsPage() {
               
               <div>
                 <div className="text-sm text-corporate-600 dark:text-corporate-300">Address</div>
-                <div className="flex items-center space-x-2">
-                  <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded flex-1">
-                    {truncateAddress(tx.fromWallet.publicKey)}
-                  </code>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => copyToClipboard(tx.fromWallet.publicKey, 'Source address')}
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded flex-1">
+                      {truncateAddress(tx.fromWallet.publicKey)}
+                    </code>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => copyToClipboard(tx.fromWallet.publicKey, 'Source address')}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <StellarAddressLink
+                    address={tx.fromWallet.publicKey}
+                    label="View Source Address"
+                    className="text-xs"
+                  />
                 </div>
               </div>
               
@@ -212,17 +213,24 @@ export default function TransactionDetailsPage() {
               
               <div>
                 <div className="text-sm text-corporate-600 dark:text-corporate-300">Destination</div>
-                <div className="flex items-center space-x-2">
-                  <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded flex-1">
-                    {truncateAddress(tx.toAddress)}
-                  </code>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => copyToClipboard(tx.toAddress, 'Destination address')}
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded flex-1">
+                      {truncateAddress(tx.toAddress)}
+                    </code>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => copyToClipboard(tx.toAddress, 'Destination address')}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <StellarAddressLink
+                    address={tx.toAddress}
+                    label="View Destination Address"
+                    className="text-xs"
+                  />
                 </div>
               </div>
             </div>
@@ -247,17 +255,24 @@ export default function TransactionDetailsPage() {
                 
                 <div>
                   <div className="text-sm text-corporate-600 dark:text-corporate-300">Transaction Address</div>
-                  <div className="flex items-center space-x-2">
-                    <code className="text-sm bg-success-100 dark:bg-success-900/30 px-2 py-1 rounded flex-1">
-                      {truncateAddress(tx.privacyProtection?.ephemeralAddress)}
-                    </code>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => copyToClipboard(tx.privacyProtection?.ephemeralAddress, 'Ephemeral address')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <code className="text-sm bg-success-100 dark:bg-success-900/30 px-2 py-1 rounded flex-1">
+                        {truncateAddress(tx.privacyProtection?.ephemeralAddress)}
+                      </code>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => copyToClipboard(tx.privacyProtection?.ephemeralAddress || '', 'Ephemeral address')}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <StellarAddressLink
+                      address={tx.privacyProtection?.ephemeralAddress}
+                      label="View Ephemeral Address"
+                      className="text-xs"
+                    />
                   </div>
                 </div>
                 
@@ -449,17 +464,14 @@ export default function TransactionDetailsPage() {
                 </div>
                 
                 {tx.stellarHash && (
-                  <div className="flex items-center justify-between">
+                  <div className="space-y-2">
                     <span className="text-sm text-corporate-600">Stellar Hash</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => copyToClipboard(tx.stellarHash || '', 'Stellar hash')}
-                      className="h-auto p-1 text-xs"
-                    >
-                      {tx.stellarHash.slice(-16)}...
-                      <Copy className="w-3 h-3 ml-1" />
-                    </Button>
+                    <StellarExplorerLink
+                      stellarHash={tx.stellarHash}
+                      status={tx.status}
+                      variant="detailed"
+                      className="text-sm"
+                    />
                   </div>
                 )}
                 
