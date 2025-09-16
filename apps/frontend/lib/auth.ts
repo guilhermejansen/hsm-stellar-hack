@@ -139,7 +139,12 @@ export async function login(email: string, password: string): Promise<{
       return {
         success: true,
         requiresTOTP: response.data.requiresTOTP,
-        user: response.data.user,
+        user: response.data?.user as User,
+      } as {
+        success: boolean;
+        requiresTOTP: boolean;
+        user?: User;
+        error?: string;
       };
     }
     
@@ -177,7 +182,7 @@ export async function verifyTOTP(totpCode: string): Promise<{
       
       return {
         success: true,
-        user,
+        user: user as User,
       };
     }
     
