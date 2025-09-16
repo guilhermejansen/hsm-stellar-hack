@@ -401,6 +401,23 @@ export interface Transaction {
     expiresAt: string;
     isActive: boolean;
   };
+  privacyProtection?: {
+    ephemeralAddress: string;
+    derivationPath: string;
+    transactionIndex: number;
+    isPrivacyProtected: boolean;
+    keyStatus: {
+      isUsed: boolean;
+      isExpired: boolean;
+      destroyedAt?: string;
+      expiresAt: string;
+    };
+    privacyBenefits: {
+      correlationPrevented: boolean;
+      addressUnique: boolean;
+      traceabilityImpossible: boolean;
+    };
+  };
   createdAt: string;
   executedAt?: string;
 }
@@ -449,6 +466,9 @@ export const transactionAPI = {
     
   getTransactionStats: (): Promise<ApiResponse<any>> =>
     apiClient.get('/transactions/stats/overview').then(res => res.data),
+    
+  getPendingTransactions: (): Promise<ApiResponse<Transaction[]>> =>
+    apiClient.get('/transactions/pending').then(res => res.data),
     
   getTransactionPrivacyReport: (): Promise<ApiResponse<any>> =>
     apiClient.get('/transactions/privacy/report').then(res => res.data),
