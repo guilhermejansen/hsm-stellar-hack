@@ -46,7 +46,7 @@ export class CreateTransactionDto {
     description: "Source wallet ID (Hot or Cold)",
     example: "clrx1234567890wallet1",
   })
-  @IsUUID()
+  @IsString()
   fromWalletId: string;
 
   @ApiProperty({
@@ -93,14 +93,14 @@ export class ApproveTransactionDto {
     description: "Transaction ID to approve",
     example: "clrx1234567890trans1",
   })
-  @IsUUID()
+  @IsString()
   transactionId: string;
 
   @ApiProperty({
     description: "Guardian ID making the approval",
     example: "clrx1234567890guard1",
   })
-  @IsUUID()
+  @IsString()
   guardianId: string;
 
   @ApiProperty({
@@ -271,7 +271,7 @@ export class GenerateChallengeDto {
     description: "Transaction ID to generate challenge for",
     example: "clrx1234567890trans1",
   })
-  @IsUUID()
+  @IsString()
   transactionId: string;
 }
 
@@ -320,7 +320,7 @@ export class ValidateChallengeDto {
     description: "Guardian ID",
     example: "clrx1234567890guard1",
   })
-  @IsUUID()
+  @IsString()
   guardianId: string;
 }
 
