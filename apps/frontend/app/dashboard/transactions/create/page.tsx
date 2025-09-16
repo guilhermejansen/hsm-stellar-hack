@@ -42,12 +42,14 @@ import Link from 'next/link';
 const transactionSchema = z.object({
   fromWalletId: z.string().min(1, 'Please select a source wallet'),
   toAddress: z.string()
-    .length(56, 'Stellar address must be exactly 56 characters')
-    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar address format'),
+    .min(56, 'Stellar address must be at least 56 characters')
+    .max(56, 'Stellar address must be exactly 56 characters')
+    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar address format - must start with G and contain only valid characters'),
   amount: z.string()
-    .regex(/^\d+(\.\d{1,7})?$/, 'Invalid amount format')
+    .min(1, 'Amount is required')
+    .regex(/^\d+(\.\d{1,7})?$/, 'Invalid amount format - use numbers with up to 7 decimal places')
     .refine(val => parseFloat(val) > 0, 'Amount must be positive')
-    .refine(val => parseFloat(val) <= 1000000, 'Amount exceeds maximum limit'),
+    .refine(val => parseFloat(val) <= 1000000, 'Amount exceeds maximum limit of 1,000,000 XLM'),
   memo: z.string().max(28, 'Memo must not exceed 28 characters').optional(),
   txType: z.enum(['PAYMENT', 'REBALANCE', 'WITHDRAWAL', 'DEPOSIT']),
 });
@@ -69,8 +71,8 @@ export default function CreateTransactionPage() {
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       fromWalletId: '',
-      toAddress: '',
-      amount: '',
+      toAddress: 'GCMFYTMZJPDS2ECNYBU5XZ4KE5GHMPX7LYOWQII4TC4XRBO5WSAJDPFM',
+      amount: '10',
       memo: '',
       txType: 'PAYMENT',
     },
@@ -78,6 +80,18 @@ export default function CreateTransactionPage() {
 
   const watchAmount = form.watch('amount');
   const watchFromWalletId = form.watch('fromWalletId');
+  const watchToAddress = form.watch('toAddress');
+  const watchMemo = form.watch('memo');
+  const watchTxType = form.watch('txType');
+
+  // Debug form state
+  console.log('🔍 Form Debug:', {
+    isValid: form.formState.isValid,
+    errors: form.formState.errors,
+    values: form.getValues(),
+    isDirty: form.formState.isDirty,
+    isSubmitting: form.formState.isSubmitting,
+  });
 
   // Fetch wallets
   const { data: hotWallet } = useQuery({
@@ -105,6 +119,11 @@ export default function CreateTransactionPage() {
       toast.error(error.response?.data?.error?.message || 'Transaction creation failed');
     },
   });
+
+  const availableWallets = [
+    ...(hotWallet?.data ? [hotWallet.data] : []),
+    ...(coldWallet?.data ? [coldWallet.data] : []),
+  ];
 
   // Update threshold info when amount or wallet changes
   useEffect(() => {
@@ -143,6 +162,13 @@ export default function CreateTransactionPage() {
     }
   }, [watchAmount, watchFromWalletId, selectedWallet]);
 
+  // Auto-select first wallet when wallets are loaded
+  useEffect(() => {
+    if (availableWallets.length > 0 && !watchFromWalletId) {
+      form.setValue('fromWalletId', availableWallets[0].id);
+    }
+  }, [availableWallets, watchFromWalletId, form]);
+
   // Update selected wallet when fromWalletId changes
   useEffect(() => {
     if (watchFromWalletId) {
@@ -161,11 +187,6 @@ export default function CreateTransactionPage() {
       // Error handled by mutation
     }
   };
-
-  const availableWallets = [
-    ...(hotWallet?.data ? [hotWallet.data] : []),
-    ...(coldWallet?.data ? [coldWallet.data] : []),
-  ];
 
   return (
     <div className="space-y-8">
@@ -245,7 +266,7 @@ export default function CreateTransactionPage() {
                       <FormLabel>Destination Address</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="GABCD1234567890EFGHIJKLMNOPQRSTUVWXYZ1234567890ABCDEF" 
+                          placeholder="GCMFYTMZJPDS2ECNYBU5XZ4KE5GHMPX7LYOWQII4TC4XRBO5WSAJDPFM" 
                           className="font-mono text-sm"
                           {...field} 
                         />
@@ -440,6 +461,25 @@ export default function CreateTransactionPage() {
                       0.0001000 XLM
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Form Validation Debug */}
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="corporate-card bg-yellow-50 dark:bg-yellow-900/20">
+              <CardHeader>
+                <CardTitle className="text-yellow-800 dark:text-yellow-200">🔍 Form Debug (Development)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div><strong>Form Valid:</strong> {form.formState.isValid ? '✅ Yes' : '❌ No'}</div>
+                  <div><strong>Is Dirty:</strong> {form.formState.isDirty ? '✅ Yes' : '❌ No'}</div>
+                  <div><strong>Is Submitting:</strong> {form.formState.isSubmitting ? '✅ Yes' : '❌ No'}</div>
+                  <div><strong>Errors:</strong> {Object.keys(form.formState.errors).length > 0 ? '❌ ' + Object.keys(form.formState.errors).join(', ') : '✅ None'}</div>
+                  <div><strong>Available Wallets:</strong> {availableWallets.length}</div>
+                  <div><strong>Selected Wallet:</strong> {watchFromWalletId || 'None'}</div>
                 </div>
               </CardContent>
             </Card>
