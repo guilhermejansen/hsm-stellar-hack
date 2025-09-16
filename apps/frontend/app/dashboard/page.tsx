@@ -6,6 +6,7 @@ import { OverviewCards } from '@/components/dashboard/overview-cards';
 import { QuickActions } from '@/components/dashboard/quick-actions';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
 import { SystemStatus } from '@/components/dashboard/system-status';
+import { PendingApprovals } from '@/components/dashboard/pending-approvals';
 import { guardianAPI, walletAPI, transactionAPI, monitoringAPI } from '@/lib/api';
 import { queryKeys } from '@/context/query-provider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -106,6 +107,9 @@ export default function DashboardPage() {
 
       {/* Quick Actions */}
       <QuickActions user={user} />
+
+      {/* Pending Approvals - High Priority Section */}
+      <PendingApprovals />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
