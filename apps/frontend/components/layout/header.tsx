@@ -130,9 +130,9 @@ export function Header() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/dashboard/security" className="flex items-center">
+                  <Link href="/dashboard/privacy" className="flex items-center">
                     <Shield className="w-4 h-4 mr-2" />
-                    Security Settings
+                    Privacy & Security
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
