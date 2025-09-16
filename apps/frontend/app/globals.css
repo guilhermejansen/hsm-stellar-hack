@@ -87,19 +87,19 @@
   }
   
   .status-success {
-    @apply bg-success-100 text-success-800 border border-success-200;
+    @apply bg-success-100 text-success-800 border border-success-200 dark:bg-success-900/20 dark:text-success-300 dark:border-success-800;
   }
   
   .status-warning {
-    @apply bg-warning-100 text-warning-800 border border-warning-200;
+    @apply bg-warning-100 text-warning-800 border border-warning-200 dark:bg-warning-900/20 dark:text-warning-300 dark:border-warning-800;
   }
   
   .status-error {
-    @apply bg-error-100 text-error-800 border border-error-200;
+    @apply bg-error-100 text-error-800 border border-error-200 dark:bg-error-900/20 dark:text-error-300 dark:border-error-800;
   }
   
   .status-pending {
-    @apply bg-corporate-100 text-corporate-800 border border-corporate-200;
+    @apply bg-corporate-100 text-corporate-800 border border-corporate-200 dark:bg-corporate-800/50 dark:text-corporate-300 dark:border-corporate-600;
   }
   
   .guardian-card {
@@ -111,15 +111,15 @@
   }
   
   .metric-card {
-    @apply corporate-card p-6 text-center;
+    @apply corporate-card p-6 text-center hover:shadow-xl transition-all duration-300;
   }
   
   .metric-value {
-    @apply text-3xl font-bold text-corporate-900;
+    @apply text-3xl font-bold text-corporate-900 dark:text-corporate-100;
   }
   
   .metric-label {
-    @apply text-sm text-corporate-600 font-medium;
+    @apply text-sm text-corporate-600 font-medium dark:text-corporate-300;
   }
   
   .sidebar-nav-item {
@@ -127,7 +127,7 @@
   }
   
   .sidebar-nav-item-active {
-    @apply bg-stellar-100 text-stellar-900 border-r-2 border-stellar-600;
+    @apply bg-stellar-100 text-stellar-900 border-r-2 border-stellar-600 dark:bg-stellar-900/30 dark:text-stellar-300 dark:border-stellar-400;
   }
   
   .sidebar-nav-item-inactive {
@@ -184,7 +184,7 @@
 /* Focus and Accessibility */
 @layer base {
   .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-stellar-500 focus:ring-offset-2;
+    @apply focus:outline-none focus:ring-2 focus:ring-stellar-500 focus:ring-offset-2 dark:focus:ring-stellar-400;
   }
   
   .sr-only {
@@ -205,3 +205,4 @@
   .corporate-card {
     @apply shadow-none border border-gray-300;
   }
+}
