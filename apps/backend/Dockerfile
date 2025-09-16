@@ -48,6 +48,10 @@ COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
 
+# Copy Prisma schema and generated client for migrations
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+
 # Copy assets for WhatsApp (stickers, images)
 COPY --chown=nestjs:nodejs avatar-stellar-sticker.txt ./
 COPY --chown=nestjs:nodejs success.txt ./
@@ -55,8 +59,6 @@ COPY --chown=nestjs:nodejs totp.txt ./
 
 # Create logs directory
 RUN mkdir -p logs && chown nestjs:nodejs logs
-
-# curl already installed above
 
 # Switch to non-root user
 USER nestjs
@@ -68,6 +70,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3001/health || exit 1
 
-# Start application with dumb-init
+# Start application
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/main.js"]
