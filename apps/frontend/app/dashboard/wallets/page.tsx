@@ -226,7 +226,7 @@ export default function WalletsPage() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => copyAddress(coldWallet.data.publicKey)}
+                      onClick={() => copyAddress(coldWallet.data?.publicKey || '')}
                       className="h-auto p-1 text-xs"
                     >
                       {truncateAddress(coldWallet.data.publicKey)}
@@ -277,7 +277,7 @@ export default function WalletsPage() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => copyAddress(hotWallet.data.publicKey)}
+                      onClick={() => copyAddress(hotWallet.data?.publicKey || '')}
                       className="h-auto p-1 text-xs"
                     >
                       {truncateAddress(hotWallet.data.publicKey)}
@@ -534,7 +534,7 @@ export default function WalletsPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => copyAddress(coldWallet.data.publicKey)}
+                    onClick={() => copyAddress(coldWallet.data?.publicKey || '')}
                     className="w-full"
                   >
                     <Copy className="w-4 h-4 mr-2" />
@@ -604,7 +604,7 @@ export default function WalletsPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => copyAddress(hotWallet.data.publicKey)}
+                    onClick={() => copyAddress(hotWallet.data?.publicKey || '')}
                     className="w-full"
                   >
                     <Copy className="w-4 h-4 mr-2" />
