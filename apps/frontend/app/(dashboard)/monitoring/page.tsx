@@ -349,6 +349,7 @@ export default function MonitoringPage() {
             ) : null}
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {/* HSM Operations */}
