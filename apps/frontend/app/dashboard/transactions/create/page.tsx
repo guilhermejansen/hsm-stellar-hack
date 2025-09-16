@@ -109,11 +109,13 @@ export default function CreateTransactionPage() {
     mutationFn: (data: TransactionFormData) => transactionAPI.createTransaction(data),
     onSuccess: (result) => {
       if (result.data?.requiresApproval) {
-        toast.success('Transaction created! WhatsApp notifications sent to guardians for approval.');
+        toast.success('Transaction created! Redirecting to approval interface...');
+        // Redirect to integrated approval page
+        router.push(`/dashboard/transactions/${result.data.transactionId}/approve` as any);
       } else {
         toast.success('Transaction created and executed automatically!');
+        router.push('/dashboard/transactions');
       }
-      router.push('/dashboard/transactions');
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error?.message || 'Transaction creation failed');
