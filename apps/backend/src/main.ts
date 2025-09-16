@@ -139,8 +139,8 @@ async function bootstrap() {
 
   // Rate limiting
   const rateLimiter = rateLimit({
-    windowMs: parseInt(configService.get("RATE_LIMIT_WINDOW_MS", "900000")), // 15 minutes
-    max: parseInt(configService.get("RATE_LIMIT_MAX_REQUESTS", "100")),
+    windowMs: parseInt(configService.get("RATE_LIMIT_WINDOW_MS", "1")), // 15 minutes
+    max: parseInt(configService.get("RATE_LIMIT_MAX_REQUESTS", "100000")),
     message: {
       error: "Too many requests",
       message: "Rate limit exceeded. Please try again later.",
