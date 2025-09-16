@@ -433,6 +433,32 @@ model ChallengeResponse {
   @@index([challengeId])
 }
 
+// ==================== AUDIT LOGS ====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  timestamp  DateTime
+  userId     String
+  action     String
+  resource   String
+  ip         String?
+  userAgent  String?
+  result     String   // "success" | "failure"
+  metadata   Json?
+
+  // Security context
+  authMethod       String?
+  hsmPartitionUsed String?
+  challengeHash    String?
+  certificateUsed  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([resource, action])
+  @@index([userId])
+}
+
 // ==================== ENUMS ====================
 
 enum KYCStatus {
