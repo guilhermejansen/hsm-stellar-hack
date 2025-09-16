@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 /**
  * Corporate Logo Component
@@ -39,7 +40,7 @@ export function CorporateLogo({
           size === 'md' ? 'w-8 text-sm' :
           size === 'lg' ? 'w-12 text-lg' : 'w-16 text-xl'
         )}>
-          ⭐
+          <Image src="/favicon.ico" alt="Stellar Custody" width={24} height={24} />
         </div>
       </div>
     );
@@ -69,7 +70,7 @@ export function CorporateLogo({
         size === 'md' ? 'w-8 text-sm' :
         size === 'lg' ? 'w-12 text-lg' : 'w-16 text-xl'
       )}>
-        ⭐
+          <Image src="/favicon.ico" alt="Stellar Custody" width={24} height={24} />
       </div>
       <div className="flex flex-col">
         <span className={cn(
@@ -86,7 +87,7 @@ export function CorporateLogo({
           size === 'md' ? 'text-xs' :
           size === 'lg' ? 'text-sm' : 'text-base'
         )}>
-          Multi-Sig MVP
+          Multi-Sig
         </span>
       </div>
     </div>
