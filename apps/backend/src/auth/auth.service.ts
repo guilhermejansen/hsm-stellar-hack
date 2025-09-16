@@ -1,22 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { authenticator } from 'otplib';
-import * as bcrypt from 'bcrypt';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import { authenticator } from "otplib";
+import * as bcrypt from "bcrypt";
 
-import { DatabaseService } from '../database/database.service';
-import { EncryptionService } from '../common/encryption.service';
-import { AuditService } from '../common/audit.service';
+import { DatabaseService } from "../database/database.service";
+import { EncryptionService } from "../common/encryption.service";
+import { AuditService } from "../common/audit.service";
 
 /**
  * 🔐 Authentication Service - JWT + TOTP + Session Management
- * 
+ *
  * Following security-practices.mdc authentication layers:
  * 1. User Login: Email + Password + TOTP
  * 2. Guardian Actions: Additional TOTP verification
  * 3. Transaction Approval: Separate TOTP per approval
  * 4. Emergency Override: Admin recovery codes
- * 
+ *
  * Security features:
  * - JWT tokens with short expiry (15 minutes)
  * - TOTP replay protection
@@ -33,14 +33,14 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly encryption: EncryptionService,
     private readonly auditService: AuditService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
   ) {
     // Configure TOTP
     authenticator.options = {
-      window: 1,              // Allow 1 step tolerance
-      digits: 6,              // 6-digit codes
-      step: 30,               // 30 second intervals
-      crypto: require('crypto') // Use Node crypto
+      window: 1, // Allow 1 step tolerance
+      digits: 6, // 6-digit codes
+      step: 30, // 30 second intervals
+      crypto: require("crypto"), // Use Node crypto
     };
   }
 
@@ -54,8 +54,8 @@ export class AuthService {
       const user = await this.database.user.findUnique({
         where: { email: email.toLowerCase() },
         include: {
-          guardian: true
-        }
+          guardian: true,
+        },
       });
 
       if (!user) {
@@ -66,10 +66,10 @@ export class AuthService {
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       if (!isPasswordValid) {
         await this.auditService.logSecurityEvent(
-          'invalid_password_attempt',
-          'MEDIUM',
+          "invalid_password_attempt",
+          "MEDIUM",
           user.id,
-          { email }
+          { email },
         );
         return null;
       }
@@ -77,10 +77,10 @@ export class AuthService {
       // Check if user is active
       if (user.guardian && !user.guardian.isActive) {
         await this.auditService.logSecurityEvent(
-          'inactive_user_login_attempt',
-          'HIGH',
+          "inactive_user_login_attempt",
+          "HIGH",
           user.id,
-          { email }
+          { email },
         );
         return null;
       }
@@ -92,10 +92,10 @@ export class AuthService {
         role: user.guardian?.role,
         isGuardian: !!user.guardian,
         hsmActivated: user.hsmActivated,
-        totpRequired: !!user.totpSecret
+        totpRequired: !!user.totpSecret,
       };
     } catch (error) {
-      this.logger.error('❌ User validation failed:', error.message);
+      this.logger.error("❌ User validation failed:", error.message);
       return null;
     }
   }
@@ -103,7 +103,12 @@ export class AuthService {
   /**
    * Login with email and password (returns session token, requires TOTP for sensitive actions)
    */
-  async login(email: string, password: string, ipAddress: string, userAgent: string): Promise<{
+  async login(
+    email: string,
+    password: string,
+    ipAddress: string,
+    userAgent: string,
+  ): Promise<{
     sessionToken: string;
     requiresTOTP: boolean;
     totpChallenge: string;
@@ -114,7 +119,7 @@ export class AuthService {
 
       const user = await this.validateUser(email, password);
       if (!user) {
-        throw new Error('Invalid credentials');
+        throw new Error("Invalid credentials");
       }
 
       // Generate session token (short-lived)
@@ -123,33 +128,35 @@ export class AuthService {
           sub: user.userId,
           email: user.email,
           role: user.role,
-          type: 'session'
+          type: "session",
         },
         {
-          expiresIn: '15m' // Short session for security
-        }
+          expiresIn: "15m", // Short session for security
+        },
       );
 
       // Generate TOTP challenge ID
-      const totpChallenge = require('uuid').v4();
+      const totpChallenge = require("uuid").v4();
 
       // Audit log
       await this.auditService.logEvent({
         timestamp: new Date(),
         userId: user.userId,
-        action: 'auth.login',
-        resource: 'authentication',
+        action: "auth.login",
+        resource: "authentication",
         ip: ipAddress,
         userAgent,
-        result: 'success',
+        result: "success",
         metadata: {
           email: user.email,
           role: user.role,
-          requiresTOTP: user.totpRequired
-        }
+          requiresTOTP: user.totpRequired,
+        },
       });
 
-      this.logger.log(`✅ Login successful: ${user.email} (${user.role || 'user'})`);
+      this.logger.log(
+        `✅ Login successful: ${user.email} (${user.role || "user"})`,
+      );
 
       return {
         sessionToken,
@@ -161,19 +168,19 @@ export class AuthService {
           name: user.name,
           role: user.role,
           isGuardian: user.isGuardian,
-          hsmActivated: user.hsmActivated
-        }
+          hsmActivated: user.hsmActivated,
+        },
       };
     } catch (error) {
       await this.auditService.logSecurityEvent(
-        'login_failed',
-        'MEDIUM',
-        'unknown',
+        "login_failed",
+        "MEDIUM",
+        "unknown",
         { email, error: error.message },
-        { ip: ipAddress, get: () => userAgent }
+        { ip: ipAddress, get: () => userAgent },
       );
-      
-      this.logger.error('❌ Login failed:', error.message);
+
+      this.logger.error("❌ Login failed:", error.message);
       throw error;
     }
   }
@@ -187,19 +194,21 @@ export class AuthService {
   async verifyTOTP(
     userId: string,
     totpCode: string,
-    action: string = 'general'
+    action: string = "general",
   ): Promise<boolean> {
     try {
-      this.logger.log(`🔢 Verifying TOTP for user: ${userId} (action: ${action})`);
+      this.logger.log(
+        `🔢 Verifying TOTP for user: ${userId} (action: ${action})`,
+      );
 
       // Check replay attack
       const replayKey = `${userId}:${totpCode}`;
       if (this.usedTotpCodes.has(replayKey)) {
         await this.auditService.logSecurityEvent(
-          'totp_replay_attack',
-          'HIGH',
+          "totp_replay_attack",
+          "HIGH",
           userId,
-          { action, totpCode: totpCode.substring(0, 2) + '****' }
+          { action, totpCode: totpCode.substring(0, 2) + "****" },
         );
         return false;
       }
@@ -207,7 +216,7 @@ export class AuthService {
       // Get user with TOTP secret
       const user = await this.database.user.findUnique({
         where: { id: userId },
-        include: { guardian: true }
+        include: { guardian: true },
       });
 
       if (!user || !user.totpSecret) {
@@ -215,12 +224,14 @@ export class AuthService {
       }
 
       // For development, accept mock TOTP codes
-      const isDevelopment = this.configService.get('NODE_ENV') === 'development';
-      const mockTotpEnabled = this.configService.get('BYPASS_TOTP_IN_TESTS', 'true') === 'true';
-      
+      const isDevelopment =
+        this.configService.get("NODE_ENV") === "development";
+      const mockTotpEnabled =
+        this.configService.get("BYPASS_TOTP_IN_TESTS", "false") === "true";
+
       let isValid = false;
-      
-      if (isDevelopment && mockTotpEnabled && totpCode === '123456') {
+
+      if (isDevelopment && mockTotpEnabled && totpCode === "123456") {
         // Accept mock TOTP for development
         isValid = true;
         this.logger.log(`🔧 Development mode: Accepting mock TOTP code`);
@@ -228,9 +239,9 @@ export class AuthService {
         try {
           // For guardians, use guardian TOTP secret
           const encryptedSecret = user.guardian?.totpSecret || user.totpSecret;
-          
+
           if (!encryptedSecret) {
-            this.logger.error('❌ No TOTP secret found');
+            this.logger.error("❌ No TOTP secret found");
             return false;
           }
 
@@ -240,16 +251,16 @@ export class AuthService {
             totpSecret = this.encryption.decrypt(encryptedSecret);
           } catch (decryptError) {
             // Fallback: assume it's base64 encoded (from seed)
-            totpSecret = Buffer.from(encryptedSecret, 'base64').toString();
+            totpSecret = Buffer.from(encryptedSecret, "base64").toString();
           }
 
           // Verify TOTP
           isValid = authenticator.verify({
             token: totpCode,
-            secret: totpSecret
+            secret: totpSecret,
           });
         } catch (error) {
-          this.logger.error('❌ TOTP validation error:', error.message);
+          this.logger.error("❌ TOTP validation error:", error.message);
           isValid = false;
         }
       }
@@ -263,7 +274,7 @@ export class AuthService {
         if (user.guardian) {
           await this.database.guardian.update({
             where: { id: user.guardian.id },
-            data: { lastTotpUsed: totpCode }
+            data: { lastTotpUsed: totpCode },
           });
         }
 
@@ -272,25 +283,25 @@ export class AuthService {
           timestamp: new Date(),
           userId,
           action: `auth.totp_verified.${action}`,
-          resource: 'authentication',
-          ip: 'backend-service',
-          userAgent: 'auth-service',
-          result: 'success',
-          metadata: { action }
+          resource: "authentication",
+          ip: "backend-service",
+          userAgent: "auth-service",
+          result: "success",
+          metadata: { action },
         });
       } else {
         // Audit log failure
         await this.auditService.logSecurityEvent(
-          'totp_verification_failed',
-          'MEDIUM',
+          "totp_verification_failed",
+          "MEDIUM",
           userId,
-          { action, totpCode: totpCode.substring(0, 2) + '****' }
+          { action, totpCode: totpCode.substring(0, 2) + "****" },
         );
       }
 
       return isValid;
     } catch (error) {
-      this.logger.error('❌ TOTP verification failed:', error.message);
+      this.logger.error("❌ TOTP verification failed:", error.message);
       return false;
     }
   }
@@ -303,18 +314,18 @@ export class AuthService {
   async generateAccessToken(userId: string, totpCode: string): Promise<string> {
     try {
       // Verify TOTP first
-      const totpValid = await this.verifyTOTP(userId, totpCode, 'access_token');
+      const totpValid = await this.verifyTOTP(userId, totpCode, "access_token");
       if (!totpValid) {
-        throw new Error('Invalid TOTP code');
+        throw new Error("Invalid TOTP code");
       }
 
       const user = await this.database.user.findUnique({
         where: { id: userId },
-        include: { guardian: true }
+        include: { guardian: true },
       });
 
       if (!user) {
-        throw new Error('User not found');
+        throw new Error("User not found");
       }
 
       // Generate full access token
@@ -324,18 +335,18 @@ export class AuthService {
           email: user.email,
           role: user.guardian?.role,
           level: user.guardian?.level,
-          type: 'access',
-          hsmActivated: user.hsmActivated
+          type: "access",
+          hsmActivated: user.hsmActivated,
         },
         {
-          expiresIn: this.configService.get('JWT_EXPIRES_IN', '24h')
-        }
+          expiresIn: this.configService.get("JWT_EXPIRES_IN", "24h"),
+        },
       );
 
       this.logger.log(`✅ Access token generated for: ${user.email}`);
       return accessToken;
     } catch (error) {
-      this.logger.error('❌ Access token generation failed:', error.message);
+      this.logger.error("❌ Access token generation failed:", error.message);
       throw error;
     }
   }
@@ -346,19 +357,19 @@ export class AuthService {
   async verifyToken(token: string): Promise<any> {
     try {
       const payload = this.jwtService.verify(token);
-      
+
       // Check if user still exists and is active
       const user = await this.database.user.findUnique({
         where: { id: payload.sub },
-        include: { guardian: true }
+        include: { guardian: true },
       });
 
       if (!user) {
-        throw new Error('User not found');
+        throw new Error("User not found");
       }
 
       if (user.guardian && !user.guardian.isActive) {
-        throw new Error('Guardian account deactivated');
+        throw new Error("Guardian account deactivated");
       }
 
       return {
@@ -367,10 +378,10 @@ export class AuthService {
         role: user.guardian?.role,
         level: user.guardian?.level,
         isGuardian: !!user.guardian,
-        hsmActivated: user.hsmActivated
+        hsmActivated: user.hsmActivated,
       };
     } catch (error) {
-      this.logger.error('❌ Token verification failed:', error.message);
+      this.logger.error("❌ Token verification failed:", error.message);
       return null;
     }
   }
@@ -384,22 +395,28 @@ export class AuthService {
   async authenticateGuardianAction(
     guardianId: string,
     totpCode: string,
-    action: string
+    action: string,
   ): Promise<boolean> {
     try {
-      this.logger.log(`👥 Authenticating guardian action: ${action} for ${guardianId}`);
+      this.logger.log(
+        `👥 Authenticating guardian action: ${action} for ${guardianId}`,
+      );
 
       const guardian = await this.database.guardian.findUnique({
         where: { id: guardianId },
-        include: { user: true }
+        include: { user: true },
       });
 
       if (!guardian || !guardian.isActive || !guardian.totpVerified) {
         await this.auditService.logSecurityEvent(
-          'guardian_auth_invalid_state',
-          'HIGH',
+          "guardian_auth_invalid_state",
+          "HIGH",
           guardianId,
-          { action, isActive: guardian?.isActive, totpVerified: guardian?.totpVerified }
+          {
+            action,
+            isActive: guardian?.isActive,
+            totpVerified: guardian?.totpVerified,
+          },
         );
         return false;
       }
@@ -411,14 +428,14 @@ export class AuthService {
         await this.auditService.logGuardianAction(
           guardianId,
           `authenticated_for_${action}`,
-          'success',
-          { action }
+          "success",
+          { action },
         );
       }
 
       return isValid;
     } catch (error) {
-      this.logger.error('❌ Guardian authentication failed:', error.message);
+      this.logger.error("❌ Guardian authentication failed:", error.message);
       return false;
     }
   }
@@ -432,7 +449,7 @@ export class AuthService {
     try {
       return await bcrypt.hash(password, 12);
     } catch (error) {
-      this.logger.error('❌ Password hashing failed:', error.message);
+      this.logger.error("❌ Password hashing failed:", error.message);
       throw error;
     }
   }
@@ -444,7 +461,7 @@ export class AuthService {
     try {
       return await bcrypt.compare(password, hash);
     } catch (error) {
-      this.logger.error('❌ Password verification failed:', error.message);
+      this.logger.error("❌ Password verification failed:", error.message);
       return false;
     }
   }
@@ -454,27 +471,31 @@ export class AuthService {
   /**
    * Create user session
    */
-  async createSession(userId: string, ipAddress: string, userAgent: string): Promise<string> {
+  async createSession(
+    userId: string,
+    ipAddress: string,
+    userAgent: string,
+  ): Promise<string> {
     try {
-      const sessionId = require('uuid').v4();
-      
+      const sessionId = require("uuid").v4();
+
       // Store session info (in production, use Redis)
       // For now, just return session ID
-      
+
       await this.auditService.logEvent({
         timestamp: new Date(),
         userId,
-        action: 'auth.session_created',
-        resource: 'session',
+        action: "auth.session_created",
+        resource: "session",
         ip: ipAddress,
         userAgent,
-        result: 'success',
-        metadata: { sessionId }
+        result: "success",
+        metadata: { sessionId },
       });
 
       return sessionId;
     } catch (error) {
-      this.logger.error('❌ Session creation failed:', error.message);
+      this.logger.error("❌ Session creation failed:", error.message);
       throw error;
     }
   }
@@ -485,21 +506,21 @@ export class AuthService {
   async invalidateSession(sessionId: string, userId: string): Promise<void> {
     try {
       // Remove from session store (Redis in production)
-      
+
       await this.auditService.logEvent({
         timestamp: new Date(),
         userId,
-        action: 'auth.session_invalidated',
-        resource: 'session',
-        ip: 'backend-service',
-        userAgent: 'auth-service',
-        result: 'success',
-        metadata: { sessionId }
+        action: "auth.session_invalidated",
+        resource: "session",
+        ip: "backend-service",
+        userAgent: "auth-service",
+        result: "success",
+        metadata: { sessionId },
       });
 
       this.logger.log(`✅ Session invalidated: ${sessionId}`);
     } catch (error) {
-      this.logger.error('❌ Session invalidation failed:', error.message);
+      this.logger.error("❌ Session invalidation failed:", error.message);
       throw error;
     }
   }
@@ -513,12 +534,12 @@ export class AuthService {
     try {
       const user = await this.database.user.findUnique({
         where: { id: userId },
-        select: { totpSecret: true }
+        select: { totpSecret: true },
       });
 
       return !!user?.totpSecret;
     } catch (error) {
-      this.logger.error('❌ TOTP requirement check failed:', error.message);
+      this.logger.error("❌ TOTP requirement check failed:", error.message);
       return false;
     }
   }
@@ -527,8 +548,8 @@ export class AuthService {
    * Generate backup codes for TOTP
    */
   generateBackupCodes(): string[] {
-    return Array.from({ length: 8 }, () => 
-      require('crypto').randomBytes(4).toString('hex').toUpperCase()
+    return Array.from({ length: 8 }, () =>
+      require("crypto").randomBytes(4).toString("hex").toUpperCase(),
     );
   }
 }
