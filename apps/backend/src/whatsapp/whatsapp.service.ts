@@ -96,17 +96,10 @@ export class WhatsAppService {
       }
       this.logger.log(`📱 Sending text to ${phone}`);
 
-      // Remove country code if phone already has it
-      const cleanPhone = phone.startsWith("+55")
-        ? phone.substring(3)
-        : phone.replace("+", "");
-
       const response = await this.whatsappClient.post("/chat/send/text", {
-        Phone: cleanPhone,
+        Phone: phone,
         Body: message,
         Presence: 3000,
-        Duration: 86400,
-        LinkPreview: true,
         NumberCheck: true,
       });
 
@@ -145,10 +138,6 @@ export class WhatsAppService {
         `📱 Sending approval button to ${approval.guardianRole}: ${approval.guardianPhone}`,
       );
 
-      const cleanPhone = approval.guardianPhone.startsWith("+55")
-        ? approval.guardianPhone.substring(3)
-        : approval.guardianPhone.replace("+", "");
-
       // Build approval URL
       const frontendUrl = this.configService.get(
         "FRONTEND_URL",
@@ -156,23 +145,29 @@ export class WhatsAppService {
       );
       const approvalUrl = `${frontendUrl}/approve/${approval.transactionId}?guardian=${approval.guardianRole}&challenge=${approval.challengeHash}`;
 
-      const response = await this.whatsappClient.post("/chat/send/buttons", {
-        phone: cleanPhone,
-        title: "⚠️ Aprovação Necessária",
-        body: `🔐 **Transação Multi-Sig**\n\n💰 **Valor:** ${approval.amount} XLM\n📍 **Destino:** ${approval.transactionId.slice(-8)}...\n🎯 **Challenge:** ${approval.challengeHash}\n\n👤 **Guardião:** ${approval.guardianRole}`,
+      const requestData = {
+        phone: approval.guardianPhone,
+        title: "⚠️ Requeriment Approval",
+        body: `🔐 **Multi-Sig Transaction**\n\n💰 **Amount:** ${approval.amount} XLM\n📍 **Destination:** ${approval.transactionId.slice(-8)}...\n🎯 **Challenge:** ${approval.challengeHash}\n\n👤 **Guardian:** ${approval.guardianRole}`,
         image: {
           url: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(approvalUrl)}`,
         },
         buttons: [
           {
             buttonId: "approve_tx",
-            buttonText: { displayText: "✅ Aprovar Agora" },
+            buttonText: { displayText: "✅ Approve Now" },
             type: "cta_url",
             url: approvalUrl,
           },
         ],
-        footer: `Stellar Custody MVP - ${approval.guardianRole}`,
-      });
+        footer: `Stellar Custody - ${approval.guardianRole}`,
+      };
+
+      this.logger.log(`🔧 DEBUG: Sending WhatsApp request to ${approval.guardianPhone}:`, JSON.stringify(requestData, null, 2));
+
+      const response = await this.whatsappClient.post("/chat/send/buttons", requestData);
+
+      this.logger.log(`🔧 DEBUG: WhatsApp API response:`, JSON.stringify(response.data, null, 2));
 
       // Save notification
       await this.saveNotification(
@@ -214,10 +209,6 @@ export class WhatsAppService {
       }
       this.logger.log(`🎉 Sending Stellar success sticker to ${phone}`);
 
-      const cleanPhone = phone.startsWith("+55")
-        ? phone.substring(3)
-        : phone.replace("+", "");
-
       // Get custom Stellar sticker from assets
       const stellarSticker = await this.assetsService.getStellarSticker();
 
@@ -225,7 +216,7 @@ export class WhatsAppService {
       const stickerResponse = await this.whatsappClient.post(
         "/chat/send/sticker",
         {
-          Phone: cleanPhone,
+          Phone: phone,
           Sticker: stellarSticker,
         },
       );
@@ -263,10 +254,6 @@ export class WhatsAppService {
         `🔐 Sending Cold Wallet auth request to ${approval.guardianRole}: ${approval.guardianPhone}`,
       );
 
-      const cleanPhone = approval.guardianPhone.startsWith("+55")
-        ? approval.guardianPhone.substring(3)
-        : approval.guardianPhone.replace("+", "");
-
       // Get TOTP instruction message and image
       const totpMessage = await this.assetsService.getTOTPMessage();
       const totpImage = await this.assetsService.getTOTPImage();
@@ -277,7 +264,7 @@ export class WhatsAppService {
       // Send image with TOTP instructions (if available)
       if (totpImage) {
         await this.whatsappClient.post("/chat/send/image", {
-          Phone: cleanPhone,
+          Phone: approval.guardianPhone,
           Image: totpImage,
           Caption: `🔐 **Autenticação Cold Wallet**\n\n${approval.guardianRole}, uma transação de ${approval.amount} XLM precisa da sua aprovação.\n\n🎯 **Challenge:** ${approval.challengeHash}`,
         });
@@ -287,9 +274,9 @@ export class WhatsAppService {
       const buttonResponse = await this.whatsappClient.post(
         "/chat/send/buttons",
         {
-          phone: cleanPhone,
-          title: "🔐 Autenticação Cold Wallet",
-          body: `🛡️ **TRANSAÇÃO ALTA SEGURANÇA**\n\n💰 **Valor:** ${approval.amount} XLM\n📍 **Destino:** ...${approval.transactionId.slice(-8)}\n🎯 **Challenge:** ${approval.challengeHash}\n${approval.requiresOCRA ? "\n🔢 **OCRA Obrigatório**" : ""}\n\n⏰ **Tempo limite:** 5 minutos\n\n👤 **Guardião:** ${approval.guardianRole}`,
+          phone: approval.guardianPhone,
+          title: "🔐 Cold Wallet Authentication",
+          body: `🛡️ **HIGH SECURITY TRANSACTION**\n\n💰 **Amount:** ${approval.amount} XLM\n📍 **Destination:** ...${approval.transactionId.slice(-8)}\n🎯 **Challenge:** ${approval.challengeHash}\n${approval.requiresOCRA ? "\n🔢 **OCRA Required**" : ""}\n\n⏰ **Time limit:** 5 minutes\n\n👤 **Guardian:** ${approval.guardianRole}`,
           image: totpImage
             ? undefined
             : {
@@ -298,12 +285,12 @@ export class WhatsAppService {
           buttons: [
             {
               buttonId: "approve_cold_wallet",
-              buttonText: { displayText: "🔐 Autenticar Agora" },
+              buttonText: { displayText: "🔐 Authenticate Now" },
               type: "cta_url",
               url: approvalUrl,
             },
           ],
-          footer: `🔐 Stellar Custody MVP - ${approval.guardianRole}`,
+          footer: `🔐 Stellar Custody - ${approval.guardianRole}`,
         },
       );
 
@@ -345,16 +332,12 @@ export class WhatsAppService {
   ): Promise<string> {
     try {
       this.logger.log(`📱 Sending TOTP setup to ${guardianRole}: ${phone}`);
-
-      const cleanPhone = phone.startsWith("+55")
-        ? phone.substring(3)
-        : phone.replace("+", "");
-
+      
       // Send QR code image
       const response = await this.whatsappClient.post("/chat/send/image", {
-        Phone: cleanPhone,
+        Phone: phone,
         Image: qrCodeUrl,
-        Caption: `🔐 **Configuração TOTP - ${guardianRole}**\n\n📱 **Passos:**\n1. Baixe Google Authenticator\n2. Escaneie o QR code acima\n3. Digite o código de 6 dígitos\n4. Ative sua partição HSM\n\n⚠️ **Importante:** Guarde este QR code em local seguro!`,
+        Caption: `🔐 **TOTP Setup - ${guardianRole}**\n\n📱 **Steps:**\n1. Download Google Authenticator\n2. Scan the QR code above\n3. Enter the 6-digit code\n4. Activate your HSM partition\n\n⚠️ **Important:** Keep this QR code in a secure location!`,
       });
 
       // Save notification
