@@ -21,15 +21,15 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Stellar Custody MVP',
-    template: '%s | Stellar Custody MVP',
+    default: 'Stellar Custody',
+    template: '%s | Stellar Custody',
   },
   description: 'Multi-Signature Custody System for Stellar Blockchain with HSM Integration',
   keywords: [
     'Stellar',
     'Custody',
     'Multi-Signature',
-    'HSM',
+    'HSM DINAMO',
     'Blockchain',
     'Security',
     'TOTP',
@@ -38,10 +38,13 @@ export const metadata: Metadata = {
   ],
   authors: [
     {
-      name: 'Stellar Custody Team',
+      name: 'Guilherme Jansen',
     },
+    { 
+      name: 'Alexandre Gomes',
+    }
   ],
-  creator: 'Stellar Custody MVP',
+  creator: 'Stellar Custody',
   publisher: 'Stellar Custody',
   robots: {
     index: false,
@@ -53,11 +56,12 @@ export const metadata: Metadata = {
     apple: '/apple-touch-icon.png',
   },
   manifest: '/site.webmanifest',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-  },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#3b82f6' },
     { media: '(prefers-color-scheme: dark)', color: '#1e40af' },
