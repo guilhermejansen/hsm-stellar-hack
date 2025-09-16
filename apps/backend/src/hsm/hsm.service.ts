@@ -618,7 +618,15 @@ export class HSMService implements OnModuleInit {
 
       let publicKey: string;
       if (this.mockEnabled) {
-        const parentSeed = this.mockKeys.get(params.parentKeyId);
+        let parentSeed = this.mockKeys.get(params.parentKeyId);
+        if (!parentSeed) {
+          // Attempt to reconstruct HOT key from partition if not present (seeded DB case)
+          const partSeed = this.mockPartitions.get(params.partition);
+          if (partSeed) {
+            parentSeed = this.kdf(partSeed, "m/0'/0'");
+            this.mockKeys.set(params.parentKeyId, parentSeed);
+          }
+        }
         if (!parentSeed) throw new Error("Parent key seed not found for ephemeral");
         const seed = this.kdf(parentSeed, params.derivationPath);
         const kp = Keypair.fromRawEd25519Seed(seed);
@@ -658,7 +666,7 @@ export class HSMService implements OnModuleInit {
       );
 
       this.logger.log(
-        `✅ Ephemeral key generated: ${mockPublicKey} (${params.derivationPath})`,
+        `✅ Ephemeral key generated: ${publicKey} (${params.derivationPath})`,
       );
       this.logger.log(`⏰ Auto-expires at: ${expiresAt.toISOString()}`);
 
