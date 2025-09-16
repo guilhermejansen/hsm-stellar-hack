@@ -1,6 +1,6 @@
 /**
  * 📋 Common Interfaces - Stellar Custody MVP
- * 
+ *
  * Type definitions based on Prisma schema and business requirements
  */
 
@@ -20,6 +20,8 @@ export interface HSMPartitionInfo {
   aesKeyId: string;
   masterKeyId: string;
   isActive: boolean;
+  // Optional Svault-encrypted PII blob (opaque, HSM-produced)
+  encryptedPII?: string;
 }
 
 export interface HSMKeyInfo {
@@ -34,7 +36,7 @@ export interface HSMKeyInfo {
 export interface HSMSignatureRequest {
   keyId: string;
   data: Buffer;
-  algorithm: 'ED25519';
+  algorithm: "ED25519";
   releaseId?: string;
   challenge?: string;
 }
@@ -52,7 +54,7 @@ export interface HSMKeyReleaseAuth {
 
 export interface WalletCreationRequest {
   userId: string;
-  walletType: 'HOT' | 'COLD';
+  walletType: "HOT" | "COLD";
   parentWalletId?: string;
   derivationPath: string;
 }
@@ -81,9 +83,9 @@ export interface GuardianRegistration {
   name: string;
   email: string;
   phone: string;
-  role: 'CEO' | 'CFO' | 'CTO';
+  role: "CEO" | "CFO" | "CTO";
   level: 1 | 2 | 3;
-  
+
   // KYC Information
   kycData: {
     fullName: string;
@@ -109,13 +111,13 @@ export interface ChallengeRequest {
   transactionId: string;
   amount: string;
   toAddress: string;
-  fromWalletType: 'HOT' | 'COLD';
+  fromWalletType: "HOT" | "COLD";
   guardianId: string;
 }
 
 export interface ChallengeData {
-  challengeHash: string;        // Short hash for guardian (16 chars)
-  fullChallenge: string;        // Complete challenge string
+  challengeHash: string; // Short hash for guardian (16 chars)
+  fullChallenge: string; // Complete challenge string
   challengeData: {
     transactionId: string;
     amount: string;
@@ -130,7 +132,7 @@ export interface ChallengeData {
 export interface ChallengeResponse {
   challengeHash: string;
   responseCode: string;
-  authMethod: 'OCRA_LIKE' | 'TOTP_FALLBACK';
+  authMethod: "OCRA_LIKE" | "TOTP_FALLBACK";
   guardianId: string;
 }
 
@@ -141,7 +143,7 @@ export interface TransactionCreationRequest {
   toAddress: string;
   amount: string;
   memo?: string;
-  txType: 'PAYMENT' | 'REBALANCE' | 'WITHDRAWAL' | 'DEPOSIT';
+  txType: "PAYMENT" | "REBALANCE" | "WITHDRAWAL" | "DEPOSIT";
 }
 
 export interface TransactionApprovalRequest {
@@ -149,11 +151,11 @@ export interface TransactionApprovalRequest {
   guardianId: string;
   challengeResponse?: string;
   totpCode?: string;
-  authMethod: 'OCRA_LIKE' | 'TOTP_FALLBACK';
+  authMethod: "OCRA_LIKE" | "TOTP_FALLBACK";
 }
 
 export interface ThresholdConfiguration {
-  type: 'LOW_VALUE_2_OF_3' | 'HIGH_VALUE_2_OF_3' | 'CRITICAL_3_OF_3';
+  type: "LOW_VALUE_2_OF_3" | "HIGH_VALUE_2_OF_3" | "CRITICAL_3_OF_3";
   threshold: number;
   totalParties: number;
   challengeRequired: boolean;
@@ -165,7 +167,7 @@ export interface ThresholdConfiguration {
 export interface WhatsAppMessage {
   phone: string;
   message: string;
-  type: 'text' | 'button' | 'sticker' | 'image';
+  type: "text" | "button" | "sticker" | "image";
   metadata?: {
     transactionId?: string;
     challengeHash?: string;
@@ -212,9 +214,9 @@ export interface KYCSubmission {
     occupation: string;
   };
   documents: {
-    idDocument: string;        // Document hash
-    proofOfAddress: string;    // Document hash
-    additionalDocs: string[];  // Additional document hashes
+    idDocument: string; // Document hash
+    proofOfAddress: string; // Document hash
+    additionalDocs: string[]; // Additional document hashes
   };
   contactInfo: {
     email: string;
@@ -230,7 +232,7 @@ export interface KYCSubmission {
 }
 
 export interface KYCVerificationResult {
-  status: 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'REQUIRES_UPDATE';
+  status: "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "REQUIRES_UPDATE";
   reason?: string;
   requiredUpdates?: string[];
   hsmPartitionCreated: boolean;
@@ -247,9 +249,9 @@ export interface AuditLogEntry {
   resource: string;
   ip: string;
   userAgent: string;
-  result: 'success' | 'failure';
+  result: "success" | "failure";
   metadata?: any;
-  
+
   // Security specific
   authMethod?: string;
   hsmPartitionUsed?: string;
@@ -288,22 +290,22 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 // ==================== ERROR INTERFACES ====================
 
 export interface SecurityError {
-  type: 'HSM_ERROR' | 'TOTP_ERROR' | 'CHALLENGE_ERROR' | 'MTLS_ERROR';
+  type: "HSM_ERROR" | "TOTP_ERROR" | "CHALLENGE_ERROR" | "MTLS_ERROR";
   message: string;
   code: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   additionalInfo?: any;
 }
 
 export interface HSMError extends SecurityError {
-  type: 'HSM_ERROR';
+  type: "HSM_ERROR";
   hsmOperation: string;
   partitionId?: string;
   keyId?: string;
 }
 
 export interface ChallengeError extends SecurityError {
-  type: 'CHALLENGE_ERROR';
+  type: "CHALLENGE_ERROR";
   challengeHash?: string;
   expiresAt?: Date;
   attemptsRemaining?: number;
