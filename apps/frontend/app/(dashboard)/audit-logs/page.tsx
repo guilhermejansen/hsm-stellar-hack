@@ -18,7 +18,8 @@ import {
   Search,
   Filter,
   Download,
-  Eye
+  Eye,
+  Label
 } from 'lucide-react';
 
 /**

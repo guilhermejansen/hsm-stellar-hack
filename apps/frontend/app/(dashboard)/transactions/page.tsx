@@ -299,135 +299,138 @@ export default function TransactionsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AdvancedTable
-            data={transactions?.data || []}
-            columns={[
-              {
-                accessorKey: 'id',
-                header: 'Transaction',
-                cell: ({ row }: any) => (
-                  <div className="space-y-1">
-                    <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded">
-                      {row.original.id.slice(-8)}...
-                    </code>
-                    {row.original.stellarHash && (
-                      <div className="text-xs text-corporate-500 dark:text-corporate-400">
-                        Stellar: {row.original.stellarHash.slice(-8)}...
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                accessorKey: 'fromWallet',
-                header: 'From Wallet',
-                cell: ({ row }: any) => (
-                  <div className="flex items-center space-x-2">
-                    {row.original.fromWallet.walletType === 'COLD' ? (
-                      <Snowflake className="w-4 h-4 text-stellar-600" />
-                    ) : (
-                      <Flame className="w-4 h-4 text-warning-600" />
-                    )}
-                    <div>
-                      <WalletTypeBadge type={row.original.fromWallet.walletType} />
-                      <div className="text-xs text-corporate-500 dark:text-corporate-400 mt-1">
-                        {truncateAddress(row.original.fromWallet.publicKey)}
-                      </div>
-                    </div>
-                  </div>
-                ),
-              },
-              {
-                accessorKey: 'amount',
-                header: 'Amount',
-                cell: ({ row }: any) => (
-                  <div className="font-mono font-medium">
-                    {formatXLMWithSuffix(row.original.amount)}
-                  </div>
-                ),
-              },
-              {
-                accessorKey: 'toAddress',
-                header: 'Destination',
-                cell: ({ row }: any) => (
-                  <div className="font-mono text-sm">
-                    {truncateAddress(row.original.toAddress)}
-                  </div>
-                ),
-              },
-              {
-                accessorKey: 'status',
-                header: 'Status',
-                cell: ({ row }: any) => (
-                  <TransactionStatusBadge status={row.original.status} />
-                ),
-              },
-              {
-                accessorKey: 'privacyProtection',
-                header: 'Privacy',
-                cell: ({ row }: any) => (
-                  row.original.privacyProtection?.isPrivacyProtected ? (
+          {transactionsLoading ? (
+            <TableLoading />
+          ) : transactions?.data && transactions.data.length > 0 ? (
+            <AdvancedTable
+              data={transactions?.data || []}
+              columns={[
+                {
+                  accessorKey: 'id',
+                  header: 'Transaction',
+                  cell: ({ row }: any) => (
                     <div className="space-y-1">
-                      <Badge variant="success" className="text-xs">
-                        <Shield className="w-3 h-3 mr-1" />
-                        Protected
+                      <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded">
+                        {row.original.id.slice(-8)}...
+                      </code>
+                      {row.original.stellarHash && (
+                        <div className="text-xs text-corporate-500 dark:text-corporate-400">
+                          Stellar: {row.original.stellarHash.slice(-8)}...
+                        </div>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  accessorKey: 'fromWallet',
+                  header: 'From Wallet',
+                  cell: ({ row }: any) => (
+                    <div className="flex items-center space-x-2">
+                      {row.original.fromWallet.walletType === 'COLD' ? (
+                        <Snowflake className="w-4 h-4 text-stellar-600" />
+                      ) : (
+                        <Flame className="w-4 h-4 text-warning-600" />
+                      )}
+                      <div>
+                        <WalletTypeBadge type={row.original.fromWallet.walletType} />
+                        <div className="text-xs text-corporate-500 dark:text-corporate-400 mt-1">
+                          {truncateAddress(row.original.fromWallet.publicKey)}
+                        </div>
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  accessorKey: 'amount',
+                  header: 'Amount',
+                  cell: ({ row }: any) => (
+                    <div className="font-mono font-medium">
+                      {formatXLMWithSuffix(row.original.amount)}
+                    </div>
+                  ),
+                },
+                {
+                  accessorKey: 'toAddress',
+                  header: 'Destination',
+                  cell: ({ row }: any) => (
+                    <div className="font-mono text-sm">
+                      {truncateAddress(row.original.toAddress)}
+                    </div>
+                  ),
+                },
+                {
+                  accessorKey: 'status',
+                  header: 'Status',
+                  cell: ({ row }: any) => (
+                    <TransactionStatusBadge status={row.original.status} />
+                  ),
+                },
+                {
+                  accessorKey: 'privacyProtection',
+                  header: 'Privacy',
+                  cell: ({ row }: any) => (
+                    row.original.privacyProtection?.isPrivacyProtected ? (
+                      <div className="space-y-1">
+                        <Badge variant="success" className="text-xs">
+                          <Shield className="w-3 h-3 mr-1" />
+                          Protected
+                        </Badge>
+                        <div className="text-xs text-corporate-500 dark:text-corporate-400">
+                          {truncateAddress(row.original.privacyProtection.ephemeralAddress)}
+                        </div>
+                      </div>
+                    ) : (
+                      <Badge variant="warning" className="text-xs">
+                        Not Protected
                       </Badge>
-                      <div className="text-xs text-corporate-500 dark:text-corporate-400">
-                        {truncateAddress(row.original.privacyProtection.ephemeralAddress)}
+                    )
+                  ),
+                },
+                {
+                  accessorKey: 'approvals',
+                  header: 'Approvals',
+                  cell: ({ row }: any) => (
+                    <div>
+                      <div className="text-sm">
+                        {row.original.approvals?.length || 0}/{row.original.requiredApprovals || 0}
                       </div>
+                      {row.original.approvals && row.original.approvals.length > 0 && (
+                        <div className="text-xs text-corporate-500 dark:text-corporate-400">
+                          {row.original.approvals.map((approval: any) => approval.guardianRole).join(', ')}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <Badge variant="warning" className="text-xs">
-                      Not Protected
-                    </Badge>
-                  )
-                ),
-              },
-              {
-                accessorKey: 'approvals',
-                header: 'Approvals',
-                cell: ({ row }: any) => (
-                  <div>
-                    <div className="text-sm">
-                      {row.original.approvals?.length || 0}/{row.original.requiredApprovals || 0}
+                  ),
+                },
+                {
+                  accessorKey: 'createdAt',
+                  header: 'Created',
+                  cell: ({ row }: any) => (
+                    <div className="text-sm text-corporate-600 dark:text-corporate-300">
+                      {formatDate(row.original.createdAt)}
                     </div>
-                    {row.original.approvals && row.original.approvals.length > 0 && (
-                      <div className="text-xs text-corporate-500 dark:text-corporate-400">
-                        {row.original.approvals.map((approval: any) => approval.guardianRole).join(', ')}
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                accessorKey: 'createdAt',
-                header: 'Created',
-                cell: ({ row }: any) => (
-                  <div className="text-sm text-corporate-600 dark:text-corporate-300">
-                    {formatDate(row.original.createdAt)}
-                  </div>
-                ),
-              },
-              {
-                id: 'actions',
-                header: 'Actions',
-                cell: ({ row }: any) => (
-                  <Link href={`/dashboard/transactions/${row.original.id}`}>
-                    <Button variant="outline" size="sm">
-                      <Eye className="w-4 h-4 mr-1" />
-                      View
-                    </Button>
-                  </Link>
-                ),
-              },
-            ]}
-            searchPlaceholder="Search transactions..."
-            enableGlobalFilter={true}
-            enableSorting={true}
-            enablePagination={true}
-            pageSize={15}
-          />
-        ) : (
+                  ),
+                },
+                {
+                  id: 'actions',
+                  header: 'Actions',
+                  cell: ({ row }: any) => (
+                    <Link href={`/dashboard/transactions/${row.original.id}`}>
+                      <Button variant="outline" size="sm">
+                        <Eye className="w-4 h-4 mr-1" />
+                        View
+                      </Button>
+                    </Link>
+                  ),
+                },
+              ]}
+              searchPlaceholder="Search transactions..."
+              enableGlobalFilter={true}
+              enableSorting={true}
+              enablePagination={true}
+              pageSize={15}
+            />
+          ) : (
             <div className="text-center py-12">
               <ArrowRightLeft className="w-16 h-16 text-corporate-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-corporate-700 mb-2">
