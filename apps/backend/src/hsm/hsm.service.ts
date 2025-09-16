@@ -1,25 +1,31 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import axios, { AxiosInstance } from 'axios';
-import * as crypto from 'crypto';
-import { StrKey } from '@stellar/stellar-sdk';
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import axios, { AxiosInstance } from "axios";
+import * as crypto from "crypto";
+import { StrKey } from "@stellar/stellar-sdk";
 
-import { AuditService } from '../common/audit.service';
-import { HSMConfig, HSMPartitionInfo, HSMKeyInfo, HSMSignatureRequest, HSMKeyReleaseAuth } from '../common/interfaces';
+import { AuditService } from "../common/audit.service";
+import {
+  HSMConfig,
+  HSMPartitionInfo,
+  HSMKeyInfo,
+  HSMSignatureRequest,
+  HSMKeyReleaseAuth,
+} from "../common/interfaces";
 
 /**
  * 🔐 HSM DINAMO Service - Hardware Security Module Integration
- * 
+ *
  * Following api-integrations.mdc HSM DINAMO integration rules:
  * - Individual partitions per user
  * - BIP32 Edwards XPRIV key generation
  * - AES256 keys for PII encryption
  * - TOTP-authorized key release for signing
  * - Complete KYC workflow with Svault Module
- * 
+ *
  * Architecture:
  * - Master Key in HSM partition
- * - Cold Wallet: m/0' (95% of funds) 
+ * - Cold Wallet: m/0' (95% of funds)
  * - Hot Wallet: m/0'/0' (5% of funds, derived from Cold)
  * - Guardian keys: Individual partitions with BIP32
  */
@@ -31,16 +37,16 @@ export class HSMService implements OnModuleInit {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
   ) {
     // Load HSM configuration from environment
     this.config = {
-      host: this.configService.get('HSM_HOST', '187.33.9.132'),
-      port: parseInt(this.configService.get('HSM_PORT', '4433')),
-      user: this.configService.get('HSM_USER', 'demoale'),
-      password: this.configService.get('HSM_PASS', '12345678'),
-      partition: this.configService.get('HSM_PARTITION', 'DEMO'),
-      timeout: parseInt(this.configService.get('HSM_TIMEOUT', '30000'))
+      host: this.configService.get("HSM_HOST", "187.33.9.132"),
+      port: parseInt(this.configService.get("HSM_PORT", "4433")),
+      user: this.configService.get("HSM_USER", "demoale"),
+      password: this.configService.get("HSM_PASS", "12345678"),
+      partition: this.configService.get("HSM_PARTITION", "DEMO"),
+      timeout: parseInt(this.configService.get("HSM_TIMEOUT", "30000")),
     };
   }
 
@@ -57,17 +63,16 @@ export class HSMService implements OnModuleInit {
         baseURL: `https://${this.config.host}:${this.config.port}`,
         timeout: this.config.timeout,
         headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'StellarCustody/1.0.0'
-        }
+          "Content-Type": "application/json",
+          "User-Agent": "StellarCustody/1.0.0",
+        },
       });
 
       // Test connection
       await this.testConnection();
-      this.logger.log('✅ HSM DINAMO connection established');
-      
+      this.logger.log("✅ HSM DINAMO connection established");
     } catch (error) {
-      this.logger.error('❌ HSM connection failed:', error.message);
+      this.logger.error("❌ HSM connection failed:", error.message);
       throw error;
     }
   }
@@ -79,14 +84,14 @@ export class HSMService implements OnModuleInit {
     try {
       // Mock HSM API call for testing
       // In production, this would be actual HSM API
-      this.logger.log('🔍 Testing HSM connection...');
-      
+      this.logger.log("🔍 Testing HSM connection...");
+
       // For now, just validate configuration
       if (!this.config.host || !this.config.user) {
-        throw new Error('HSM configuration incomplete');
+        throw new Error("HSM configuration incomplete");
       }
-      
-      this.logger.log('✅ HSM connection test passed');
+
+      this.logger.log("✅ HSM connection test passed");
     } catch (error) {
       throw new Error(`HSM connection test failed: ${error.message}`);
     }
@@ -100,7 +105,7 @@ export class HSMService implements OnModuleInit {
    */
   async createUserWithKYC(kycData: any): Promise<HSMPartitionInfo> {
     const startTime = Date.now();
-    
+
     try {
       // 1. Process KYC data
       const pii = {
@@ -108,63 +113,73 @@ export class HSMService implements OnModuleInit {
         docId: kycData.docId,
         address: kycData.address,
         phone: kycData.phone,
-        email: kycData.email
+        email: kycData.email,
       };
-      
-      this.logger.log('🔄 Starting KYC process with HSM partition creation');
+
+      this.logger.log("🔄 Starting KYC process with HSM partition creation");
 
       // 2. Request random from HSM (mock implementation)
-      const randomData = crypto.randomBytes(32).toString('hex');
-      
+      const randomData = crypto.randomBytes(32).toString("hex");
+
       // 3. Create user ID with SHA256
-      const userId = crypto.createHash('sha256')
+      const userId = crypto
+        .createHash("sha256")
         .update(JSON.stringify(pii) + randomData)
-        .digest('hex');
-      
+        .digest("hex");
+
       // 4. Create individual partition for user
       const partitionId = `user_${userId.substring(0, 16)}`;
       await this.createPartition(partitionId);
-      
+
       // 5. Create AES256 key for PII encryption
-      const aesKeyId = await this.generateAESKey(partitionId, `aes_pii_${userId.substring(0, 8)}`);
-      
+      const aesKeyId = await this.generateAESKey(
+        partitionId,
+        `aes_pii_${userId.substring(0, 8)}`,
+      );
+
       // 6. Create BIP32 Edwards XPRIV for Stellar
-      const masterKeyId = await this.generateBIP32Key(partitionId, `stellar_master_${userId.substring(0, 8)}`);
-      
+      const masterKeyId = await this.generateBIP32Key(
+        partitionId,
+        `stellar_master_${userId.substring(0, 8)}`,
+      );
+
       // 7. Encrypt PII with AES key using Svault Module (mock)
-      const encryptedPII = await this.svaultEncrypt(aesKeyId, JSON.stringify(pii));
+      const encryptedPII = await this.svaultEncrypt(
+        aesKeyId,
+        JSON.stringify(pii),
+      );
 
       const result: HSMPartitionInfo = {
         partitionId,
         aesKeyId,
         masterKeyId,
-        isActive: true
+        isActive: true,
+        encryptedPII,
       };
 
       // Audit log
       await this.auditService.logHSMOperation(
         userId,
-        'kyc_partition_created',
-        'success',
+        "kyc_partition_created",
+        "success",
         partitionId,
         masterKeyId,
-        { duration: Date.now() - startTime }
+        { duration: Date.now() - startTime },
       );
 
       this.logger.log(`✅ KYC partition created: ${partitionId}`);
       return result;
-      
     } catch (error) {
       await this.auditService.logHSMOperation(
-        'unknown',
-        'kyc_partition_creation_failed',
-        'failure',
+        "unknown",
+        "kyc_partition_creation_failed",
+        "failure",
         undefined,
         undefined,
-        { error: error.message, duration: Date.now() - startTime }
+        { error: error.message, duration: Date.now() - startTime },
       );
-      
-      this.logger.error('❌ KYC partition creation failed:', error.message);
+
+      this.logger.error("❌ KYC partition creation failed:", error.message);
       throw error;
     }
   }
@@ -175,13 +190,13 @@ export class HSMService implements OnModuleInit {
   private async createPartition(partitionId: string): Promise<void> {
     try {
       this.logger.log(`🔐 Creating HSM partition: ${partitionId}`);
-      
+
       // Mock HSM partition creation
       // In production: await this.hsmClient.post('/partitions', { partitionId, ...config })
-      
+
       // Simulate partition creation delay
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       this.logger.log(`✅ HSM partition created: ${partitionId}`);
     } catch (error) {
       throw new Error(`Failed to create HSM partition: ${error.message}`);
@@ -191,14 +206,17 @@ export class HSMService implements OnModuleInit {
   /**
    * Generate AES256 key for PII encryption
    */
-  private async generateAESKey(partitionId: string, keyLabel: string): Promise<string> {
+  private async generateAESKey(
+    partitionId: string,
+    keyLabel: string,
+  ): Promise<string> {
     try {
       this.logger.log(`🔑 Generating AES256 key: ${keyLabel}`);
-      
+
       // Mock AES key generation
       // In production: HSM API call to generate AES256 key
-      const aesKeyId = `aes_${crypto.randomBytes(16).toString('hex')}`;
-      
+      const aesKeyId = `aes_${crypto.randomBytes(16).toString("hex")}`;
+
       this.logger.log(`✅ AES256 key generated: ${aesKeyId}`);
       return aesKeyId;
     } catch (error) {
@@ -209,14 +227,17 @@ export class HSMService implements OnModuleInit {
   /**
    * Generate BIP32 Edwards XPRIV key for Stellar
    */
-  private async generateBIP32Key(partitionId: string, keyLabel: string): Promise<string> {
+  private async generateBIP32Key(
+    partitionId: string,
+    keyLabel: string,
+  ): Promise<string> {
     try {
       this.logger.log(`🔑 Generating BIP32 Edwards XPRIV: ${keyLabel}`);
-      
+
       // Mock BIP32 key generation
       // In production: HSM API call to generate BIP32 Edwards key
-      const masterKeyId = `bip32_${crypto.randomBytes(16).toString('hex')}`;
-      
+      const masterKeyId = `bip32_${crypto.randomBytes(16).toString("hex")}`;
+
       this.logger.log(`✅ BIP32 key generated: ${masterKeyId}`);
       return masterKeyId;
     } catch (error) {
@@ -230,11 +251,14 @@ export class HSMService implements OnModuleInit {
   private async svaultEncrypt(aesKeyId: string, data: string): Promise<string> {
     try {
       this.logger.log(`🔐 Encrypting PII with Svault Module`);
-      
+
       // Mock Svault encryption
       // In production: HSM Svault Module API call
-      const encrypted = crypto.createHash('sha256').update(data + aesKeyId).digest('hex');
-      
+      const encrypted = crypto
+        .createHash("sha256")
+        .update(data + aesKeyId)
+        .digest("hex");
+
       return `svault_${encrypted}`;
     } catch (error) {
       throw new Error(`Svault encryption failed: ${error.message}`);
@@ -247,7 +271,11 @@ export class HSMService implements OnModuleInit {
    * Create hierarchical wallet structure (Cold master, Hot derived)
    * Following BIP32 hierarchy from api-integrations.mdc
    */
-  async createWalletHierarchy(userId: string, partitionId: string, masterKeyId: string) {
+  async createWalletHierarchy(
+    userId: string,
+    partitionId: string,
+    masterKeyId: string,
+  ) {
     try {
       this.logger.log(`🌳 Creating wallet hierarchy for user: ${userId}`);
 
@@ -256,15 +284,15 @@ export class HSMService implements OnModuleInit {
         parentKeyId: masterKeyId,
         derivationPath: "m/0'",
         partition: partitionId,
-        purpose: 'cold_wallet'
+        purpose: "cold_wallet",
       });
 
-      // 2. Hot Wallet (Derived from Cold) - 5% of funds - derivation path m/0'/0'  
+      // 2. Hot Wallet (Derived from Cold) - 5% of funds - derivation path m/0'/0'
       const hotKeyInfo = await this.deriveKey({
         parentKeyId: coldKeyInfo.keyId,
         derivationPath: "m/0'/0'",
         partition: partitionId,
-        purpose: 'hot_wallet'
+        purpose: "hot_wallet",
       });
 
       const result = {
@@ -274,46 +302,47 @@ export class HSMService implements OnModuleInit {
           derivationPath: "m/0'",
           maxBalance: "95%",
           requiresTOTP: true,
-          hsmPartitionId: partitionId
+          hsmPartitionId: partitionId,
         },
         hotWallet: {
           keyId: hotKeyInfo.keyId,
           address: hotKeyInfo.publicKey,
           derivationPath: "m/0'/0'",
-          maxBalance: "5%", 
+          maxBalance: "5%",
           requiresTOTP: false,
           parentKeyId: coldKeyInfo.keyId,
-          hsmPartitionId: partitionId
-        }
+          hsmPartitionId: partitionId,
+        },
       };
 
       // Audit log
       await this.auditService.logHSMOperation(
         userId,
-        'wallet_hierarchy_created',
-        'success',
+        "wallet_hierarchy_created",
+        "success",
         partitionId,
         masterKeyId,
-        { 
+        {
           coldAddress: coldKeyInfo.publicKey,
-          hotAddress: hotKeyInfo.publicKey
-        }
+          hotAddress: hotKeyInfo.publicKey,
+        },
       );
 
-      this.logger.log(`✅ Wallet hierarchy created - Cold: ${coldKeyInfo.publicKey}, Hot: ${hotKeyInfo.publicKey}`);
+      this.logger.log(
+        `✅ Wallet hierarchy created - Cold: ${coldKeyInfo.publicKey}, Hot: ${hotKeyInfo.publicKey}`,
+      );
       return result;
-
     } catch (error) {
       await this.auditService.logHSMOperation(
         userId,
-        'wallet_hierarchy_creation_failed',
-        'failure',
+        "wallet_hierarchy_creation_failed",
+        "failure",
         partitionId,
         masterKeyId,
-        { error: error.message }
+        { error: error.message },
       );
-      
-      this.logger.error('❌ Wallet hierarchy creation failed:', error.message);
+
+      this.logger.error("❌ Wallet hierarchy creation failed:", error.message);
       throw error;
     }
   }
@@ -328,27 +357,32 @@ export class HSMService implements OnModuleInit {
     purpose: string;
   }): Promise<HSMKeyInfo> {
     try {
-      this.logger.log(`🔑 Deriving key: ${params.derivationPath} for ${params.purpose}`);
-      
+      this.logger.log(
+        `🔑 Deriving key: ${params.derivationPath} for ${params.purpose}`,
+      );
+
       // Mock BIP32 key derivation
       // In production: HSM API call for BIP32 derivation
-      const derivedKeyId = `derived_${crypto.randomBytes(16).toString('hex')}`;
-      
+      const derivedKeyId = `derived_${crypto.randomBytes(16).toString("hex")}`;
+
       // Generate mock Ed25519 public key for Stellar
-      const mockPublicKey = StrKey.encodeEd25519PublicKey(crypto.randomBytes(32));
-      
+      const mockPublicKey = StrKey.encodeEd25519PublicKey(
+        crypto.randomBytes(32),
+      );
+
       const keyInfo: HSMKeyInfo = {
         keyId: derivedKeyId,
-        keyName: `${params.purpose}_${params.derivationPath.replace(/['/]/g, '_')}`,
-        algorithm: 'ED25519',
+        keyName: `${params.purpose}_${params.derivationPath.replace(/['/]/g, "_")}`,
+        algorithm: "ED25519",
         derivationPath: params.derivationPath,
         publicKey: mockPublicKey,
-        partition: params.partition
+        partition: params.partition,
       };
 
-      this.logger.log(`✅ Key derived: ${keyInfo.keyName} -> ${keyInfo.publicKey}`);
+      this.logger.log(
+        `✅ Key derived: ${keyInfo.keyName} -> ${keyInfo.publicKey}`,
+      );
       return keyInfo;
-      
     } catch (error) {
       throw new Error(`Key derivation failed: ${error.message}`);
     }
@@ -360,78 +394,92 @@ export class HSMService implements OnModuleInit {
    * Authorize key release with TOTP and sign transaction
    * Following security-practices.mdc TOTP key release flow
    */
-  async authorizeKeyReleaseAndSign(
-    partitionId: string,
-    keyId: string,
-    totpCode: string,
-    rawTransaction: string,
-    guardianId: string
-  ): Promise<{ signature: string; keyReleaseId: string }> {
+  async authorizeKeyReleaseAndSign(params: {
+    partitionId: string;
+    keyId: string;
+    rawTransaction: string; // hex or XDR depending on caller
+    guardianId: string;
+    totpCode?: string;
+    releaseId?: string;
+  }): Promise<{ signature: string; keyReleaseId: string }> {
     const startTime = Date.now();
-    
-    try {
-      this.logger.log(`🔐 Authorizing key release for partition: ${partitionId}`);
 
-      // 1. Validate TOTP code format
-      if (!/^[0-9]{6}$/.test(totpCode)) {
-        throw new Error('Invalid TOTP code format');
+    try {
+      this.logger.log(
+        `🔐 Authorizing key release for partition: ${params.partitionId}`,
+      );
+
+      let keyReleaseAuth: HSMKeyReleaseAuth | null = null;
+      let effectiveReleaseId = params.releaseId;
+
+      // 1. If no releaseId provided, validate TOTP and authorize
+      if (!effectiveReleaseId) {
+        if (!params.totpCode || !/^[0-9]{6}$/.test(params.totpCode)) {
+          throw new Error("Invalid or missing TOTP code");
+        }
+
+        keyReleaseAuth = await this.authorizeKeyRelease({
+          partition: params.partitionId,
+          keyId: params.keyId,
+          totpCode: params.totpCode,
+          purpose: "transaction_signing",
+          guardianId: params.guardianId,
+        });
+        effectiveReleaseId = keyReleaseAuth.releaseId;
       }
 
-      // 2. TOTP authorizes HSM to release key for signing (mock)
-      const keyReleaseAuth = await this.authorizeKeyRelease({
-        partition: partitionId,
-        keyId: keyId,
-        totpCode: totpCode,
-        purpose: 'transaction_signing',
-        guardianId: guardianId
-      });
-
-      if (!keyReleaseAuth.success) {
-        throw new Error('HSM denied key release authorization');
+      if (keyReleaseAuth && !keyReleaseAuth.success) {
+        throw new Error("HSM denied key release authorization");
       }
 
       // 3. HSM signs the raw transaction with released key
       const signature = await this.signWithReleasedKey({
-        keyId: keyId,
-        data: Buffer.from(rawTransaction, 'hex'),
-        algorithm: 'ED25519',
-        releaseId: keyReleaseAuth.releaseId
+        keyId: params.keyId,
+        data: /^[0-9a-fA-F]+$/.test(params.rawTransaction)
+          ? Buffer.from(params.rawTransaction, "hex")
+          : Buffer.from(params.rawTransaction, "utf8"),
+        algorithm: "ED25519",
+        releaseId: effectiveReleaseId,
       });
 
       // Audit log
       await this.auditService.logHSMOperation(
-        guardianId,
-        'key_release_and_sign',
-        'success',
-        partitionId,
-        keyId,
+        params.guardianId,
+        "key_release_and_sign",
+        "success",
+        params.partitionId,
+        params.keyId,
         {
-          keyReleaseId: keyReleaseAuth.releaseId,
-          duration: Date.now() - startTime
-        }
+          keyReleaseId: effectiveReleaseId,
+          duration: Date.now() - startTime,
+        },
       );
 
-      this.logger.log(`✅ Transaction signed with HSM key: ${keyReleaseAuth.releaseId}`);
-      
-      return {
-        signature: signature.toString('hex'),
-        keyReleaseId: keyReleaseAuth.releaseId
-      };
+      this.logger.log(
+        `✅ Transaction signed with HSM key: ${effectiveReleaseId}`,
+      );
 
+      return {
+        signature: signature.toString("hex"),
+        keyReleaseId: effectiveReleaseId!,
+      };
     } catch (error) {
       await this.auditService.logHSMOperation(
-        guardianId,
-        'key_release_and_sign_failed',
-        'failure',
-        partitionId,
-        keyId,
-        { 
+        params.guardianId,
+        "key_release_and_sign_failed",
+        "failure",
+        params.partitionId,
+        params.keyId,
+        {
           error: error.message,
-          duration: Date.now() - startTime
-        }
+          duration: Date.now() - startTime,
+        },
       );
-      
-      this.logger.error('❌ HSM key release and signing failed:', error.message);
+
+      this.logger.error(
+        "❌ HSM key release and signing failed:",
+        error.message,
+      );
       throw error;
     }
   }
@@ -449,27 +497,26 @@ export class HSMService implements OnModuleInit {
     try {
       // Mock TOTP validation with HSM
       // In production: HSM API validates TOTP and authorizes key release
-      
-      const releaseId = `release_${crypto.randomBytes(16).toString('hex')}`;
+
+      const releaseId = `release_${crypto.randomBytes(16).toString("hex")}`;
       const now = new Date();
-      
+
       return {
         success: true,
         releaseId,
         partitionId: params.partition,
         keyId: params.keyId,
         authorizedAt: now,
-        expiresAt: new Date(now.getTime() + 300000) // 5 minutes
+        expiresAt: new Date(now.getTime() + 300000), // 5 minutes
       };
-      
     } catch (error) {
       return {
         success: false,
-        releaseId: '',
+        releaseId: "",
         partitionId: params.partition,
         keyId: params.keyId,
         authorizedAt: new Date(),
-        expiresAt: new Date()
+        expiresAt: new Date(),
       };
     }
   }
@@ -480,14 +527,13 @@ export class HSMService implements OnModuleInit {
   private async signWithReleasedKey(request: HSMSignatureRequest): Promise<Buffer> {
     try {
       this.logger.log(`✍️ Signing with HSM key: ${request.keyId}`);
-      
+
       // Mock HSM signature generation
       // In production: HSM performs Ed25519 signature with released key
       const mockSignature = crypto.randomBytes(64); // Ed25519 signature is 64 bytes
-      
+
       this.logger.log(`✅ HSM signature generated`);
       return mockSignature;
-      
     } catch (error) {
       throw new Error(`HSM signing failed: ${error.message}`);
     }
@@ -515,21 +561,25 @@ export class HSMService implements OnModuleInit {
     isEphemeral: boolean;
   }> {
     try {
-      this.logger.log(`🔑 Generating ephemeral transaction key: ${params.derivationPath}`);
+      this.logger.log(
+        `🔑 Generating ephemeral transaction key: ${params.derivationPath}`,
+      );
 
       // HSM generates ephemeral key with auto-expiry
-      const ephemeralKeyId = `ephemeral_tx_${params.transactionIndex}_${crypto.randomBytes(8).toString('hex')}`;
-      
+      const ephemeralKeyId = `ephemeral_tx_${params.transactionIndex}_${crypto.randomBytes(8).toString("hex")}`;
+
       // Generate mock Ed25519 public key for Stellar (in production: actual HSM derivation)
-      const mockPublicKey = StrKey.encodeEd25519PublicKey(crypto.randomBytes(32));
-      
-      const expiresAt = new Date(Date.now() + (params.expiresIn * 1000));
+      const mockPublicKey = StrKey.encodeEd25519PublicKey(
+        crypto.randomBytes(32),
+      );
+
+      const expiresAt = new Date(Date.now() + params.expiresIn * 1000);
 
       // Audit ephemeral key generation
       await this.auditService.logHSMOperation(
-        'system',
-        'ephemeral_key_generated',
-        'success',
+        "system",
+        "ephemeral_key_generated",
+        "success",
         params.partition,
         ephemeralKeyId,
         {
@@ -537,11 +587,13 @@ export class HSMService implements OnModuleInit {
           transactionIndex: params.transactionIndex,
           expiresAt: expiresAt.toISOString(),
           oneTimeUse: params.oneTimeUse,
-          autoDestroy: params.autoDestroy
-        }
+          autoDestroy: params.autoDestroy,
+        },
       );
 
-      this.logger.log(`✅ Ephemeral key generated: ${mockPublicKey} (${params.derivationPath})`);
+      this.logger.log(
+        `✅ Ephemeral key generated: ${mockPublicKey} (${params.derivationPath})`,
+      );
       this.logger.log(`⏰ Auto-expires at: ${expiresAt.toISOString()}`);
 
       return {
@@ -549,10 +601,12 @@ export class HSMService implements OnModuleInit {
         publicKey: mockPublicKey,
         derivationPath: params.derivationPath,
         expiresAt: expiresAt,
-        isEphemeral: true
+        isEphemeral: true,
       };
     } catch (error) {
-      throw new Error(`Ephemeral transaction key generation failed: ${error.message}`);
+      throw new Error(
+        `Ephemeral transaction key generation failed: ${error.message}`,
+      );
     }
   }
 
@@ -562,7 +616,8 @@ export class HSMService implements OnModuleInit {
   async signWithEphemeralKey(params: {
     ephemeralKeyId: string;
     rawTransaction: string;
-    totpCode: string;
+    totpCode?: string;
+    releaseId?: string;
     guardianId: string;
     partitionId: string;
     oneTimeUse: boolean;
@@ -572,40 +627,55 @@ export class HSMService implements OnModuleInit {
     signedAt: Date;
   }> {
     try {
-      this.logger.log(`✍️ Signing with ephemeral key: ${params.ephemeralKeyId}`);
+      this.logger.log(
+        `✍️ Signing with ephemeral key: ${params.ephemeralKeyId}`,
+      );
 
-      // Validate TOTP for key release authorization
-      if (!/^[0-9]{6}$/.test(params.totpCode)) {
-        throw new Error('Invalid TOTP code format');
+      // Validate TOTP if provided (dev environments may allow bypass for low-value)
+      const isDevelopment = this.configService.get("NODE_ENV") === "development";
+      const allowNoTotp = this.configService.get("ALLOW_NO_TOTP_FOR_LOW_VALUE", "false") === "true";
+      if (!params.releaseId) {
+        if (params.totpCode) {
+          if (!/^[0-9]{6}$/.test(params.totpCode)) {
+            throw new Error("Invalid TOTP code format");
+          }
+        } else if (!(isDevelopment && allowNoTotp)) {
+          throw new Error("Missing TOTP or key release id for ephemeral signing");
+        }
       }
 
       // HSM signs with ephemeral key (mock implementation)
-      const signature = crypto.randomBytes(64).toString('hex'); // Ed25519 signature
+      const signature = crypto.randomBytes(64).toString("hex"); // Ed25519 signature
       const signedAt = new Date();
 
       // Mark key as used in HSM (one-time use enforcement)
-      this.logger.log(`🔐 Ephemeral key used for signing, marking as ONE-TIME-USED`);
+      this.logger.log(
+        `🔐 Ephemeral key used for signing, marking as ONE-TIME-USED`,
+      );
 
       // Audit ephemeral key usage
       await this.auditService.logHSMOperation(
         params.guardianId,
-        'ephemeral_key_signed_transaction',
-        'success',
+        "ephemeral_key_signed_transaction",
+        "success",
         params.partitionId,
         params.ephemeralKeyId,
         {
           signatureGenerated: true,
           oneTimeUse: params.oneTimeUse,
-          signedAt: signedAt.toISOString()
-        }
+          signedAt: signedAt.toISOString(),
+          keyReleaseId: params.releaseId,
+        },
       );
 
-      this.logger.log(`✅ Transaction signed with ephemeral key: ${params.ephemeralKeyId}`);
+      this.logger.log(
+        `✅ Transaction signed with ephemeral key: ${params.ephemeralKeyId}`,
+      );
 
       return {
         signature: signature,
         keyUsed: true,
-        signedAt: signedAt
+        signedAt: signedAt,
       };
     } catch (error) {
       throw new Error(`Ephemeral key signing failed: ${error.message}`);
@@ -633,16 +703,16 @@ export class HSMService implements OnModuleInit {
 
       // Audit key destruction
       await this.auditService.logHSMOperation(
-        'system',
-        'ephemeral_key_destroyed',
-        'success',
+        "system",
+        "ephemeral_key_destroyed",
+        "success",
         params.partition,
         params.keyId,
         {
           reason: params.reason,
           destroyedAt: destroyedAt.toISOString(),
-          privacyProtected: true
-        }
+          privacyProtected: true,
+        },
       );
 
       this.logger.log(`✅ Ephemeral key destroyed in HSM: ${params.keyId}`);
@@ -650,13 +720,13 @@ export class HSMService implements OnModuleInit {
 
       return {
         success: true,
-        destroyedAt: destroyedAt
+        destroyedAt: destroyedAt,
       };
     } catch (error) {
-      this.logger.error('❌ Ephemeral key destruction failed:', error.message);
+      this.logger.error("❌ Ephemeral key destruction failed:", error.message);
       return {
         success: false,
-        reason: error.message
+        reason: error.message,
       };
     }
   }
@@ -666,23 +736,27 @@ export class HSMService implements OnModuleInit {
   /**
    * Get HSM health status
    */
-  async getHealthStatus(): Promise<{ status: string; latency: number; partitions: number }> {
+  async getHealthStatus(): Promise<{
+    status: string;
+    latency: number;
+    partitions: number;
+  }> {
     const startTime = Date.now();
-    
+
     try {
       // Mock health check
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
       return {
-        status: 'healthy',
+        status: "healthy",
         latency: Date.now() - startTime,
-        partitions: 3 // Mock: 3 guardian partitions
+        partitions: 3, // Mock: 3 guardian partitions
       };
     } catch (error) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         latency: Date.now() - startTime,
-        partitions: 0
+        partitions: 0,
       };
     }
   }
@@ -695,12 +769,12 @@ export class HSMService implements OnModuleInit {
       // Mock partition listing
       // In production: HSM API call to list partitions
       return [
-        'user_guardian_ceo_001',
-        'user_guardian_cfo_002', 
-        'user_guardian_cto_003'
+        "user_guardian_ceo_001",
+        "user_guardian_cfo_002",
+        "user_guardian_cto_003",
       ];
     } catch (error) {
-      this.logger.error('❌ Failed to list HSM partitions:', error.message);
+      this.logger.error("❌ Failed to list HSM partitions:", error.message);
       return [];
     }
   }
@@ -711,24 +785,23 @@ export class HSMService implements OnModuleInit {
   async rotateKey(partitionId: string, oldKeyId: string): Promise<string> {
     try {
       this.logger.log(`🔄 Rotating HSM key: ${oldKeyId}`);
-      
+
       // Mock key rotation
-      const newKeyId = `rotated_${crypto.randomBytes(16).toString('hex')}`;
-      
+      const newKeyId = `rotated_${crypto.randomBytes(16).toString("hex")}`;
+
       await this.auditService.logHSMOperation(
-        'system',
-        'key_rotated',
-        'success',
+        "system",
+        "key_rotated",
+        "success",
         partitionId,
         newKeyId,
-        { oldKeyId }
+        { oldKeyId },
       );
-      
+
       this.logger.log(`✅ Key rotated: ${oldKeyId} -> ${newKeyId}`);
       return newKeyId;
-      
     } catch (error) {
-      this.logger.error('❌ Key rotation failed:', error.message);
+      this.logger.error("❌ Key rotation failed:", error.message);
       throw error;
     }
   }
