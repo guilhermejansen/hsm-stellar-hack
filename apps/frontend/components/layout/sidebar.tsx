@@ -59,6 +59,12 @@ const navigationItems = [
     icon: Activity,
     description: 'System health & security events',
   },
+  {
+    name: 'Audit Logs',
+    href: '/dashboard/audit-logs',
+    icon: Eye,
+    description: 'Complete audit trail & compliance',
+  },
 ];
 
 export function Sidebar() {
@@ -71,9 +77,9 @@ export function Sidebar() {
 
   return (
     <div className="hidden md:flex md:w-64 md:flex-col">
-      <div className="flex flex-col flex-grow bg-white border-r border-corporate-200 overflow-y-auto">
+      <div className="flex flex-col flex-grow bg-white dark:bg-corporate-900 border-r border-corporate-200 dark:border-corporate-700 overflow-y-auto">
         {/* Logo Header */}
-        <div className="flex items-center flex-shrink-0 px-6 py-6 border-b border-corporate-200">
+        <div className="flex items-center flex-shrink-0 px-6 py-6 border-b border-corporate-200 dark:border-corporate-700">
           <HeaderLogo />
         </div>
 
@@ -115,13 +121,13 @@ export function Sidebar() {
         </nav>
 
         {/* User Info & Logout */}
-        <div className="flex-shrink-0 border-t border-corporate-200 p-4">
+        <div className="flex-shrink-0 border-t border-corporate-200 dark:border-corporate-700 p-4">
           {user && (
-            <div className="mb-4 p-3 bg-corporate-50 rounded-lg">
-              <div className="text-sm font-medium text-corporate-900">
+            <div className="mb-4 p-3 bg-corporate-50 dark:bg-corporate-800 rounded-lg">
+              <div className="text-sm font-medium text-corporate-900 dark:text-corporate-100">
                 {user.name}
               </div>
-              <div className="text-xs text-corporate-600">
+              <div className="text-xs text-corporate-600 dark:text-corporate-300">
                 {user.role || 'User'} {user.isGuardian && '• Guardian'}
               </div>
               {user.hsmActivated && (
@@ -139,7 +145,7 @@ export function Sidebar() {
             variant="outline"
             size="sm"
             onClick={handleLogout}
-            className="w-full text-corporate-600 hover:text-corporate-900 border-corporate-200"
+            className="w-full text-corporate-600 hover:text-corporate-900 border-corporate-200 dark:text-corporate-300 dark:hover:text-corporate-100 dark:border-corporate-600"
           >
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out

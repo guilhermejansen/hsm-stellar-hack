@@ -67,19 +67,19 @@
 /* Corporate Theme Enhancements */
 @layer components {
   .corporate-gradient {
-    @apply bg-gradient-to-br from-corporate-50 via-stellar-50 to-corporate-100;
+    @apply bg-gradient-to-br from-corporate-50 via-stellar-50 to-corporate-100 dark:from-corporate-900 dark:via-stellar-900 dark:to-corporate-800;
   }
   
   .corporate-card {
-    @apply bg-white/80 backdrop-blur-sm border border-corporate-200 shadow-lg shadow-corporate-900/5;
+    @apply bg-white/80 backdrop-blur-sm border border-corporate-200 shadow-lg shadow-corporate-900/5 dark:bg-corporate-900/80 dark:border-corporate-700 dark:shadow-corporate-100/5;
   }
   
   .corporate-button {
-    @apply bg-stellar-600 hover:bg-stellar-700 text-white font-medium transition-all duration-200 shadow-md hover:shadow-lg;
+    @apply bg-stellar-600 hover:bg-stellar-700 text-white font-medium transition-all duration-200 shadow-md hover:shadow-lg dark:bg-stellar-500 dark:hover:bg-stellar-600;
   }
   
   .corporate-input {
-    @apply border-corporate-300 focus:border-stellar-500 focus:ring-stellar-500/20;
+    @apply border-corporate-300 focus:border-stellar-500 focus:ring-stellar-500/20 dark:border-corporate-600 dark:bg-corporate-800 dark:text-corporate-100 dark:focus:border-stellar-400;
   }
   
   .status-badge {
@@ -103,11 +103,11 @@
   }
   
   .guardian-card {
-    @apply corporate-card p-6 hover:shadow-xl transition-all duration-300 hover:scale-[1.02];
+    @apply corporate-card p-6 hover:shadow-xl transition-all duration-300 hover:scale-[1.02] dark:hover:shadow-stellar-500/10;
   }
   
   .transaction-row {
-    @apply hover:bg-corporate-50/50 transition-colors duration-150 cursor-pointer;
+    @apply hover:bg-corporate-50/50 transition-colors duration-150 cursor-pointer dark:hover:bg-corporate-800/50;
   }
   
   .metric-card {
@@ -131,7 +131,7 @@
   }
   
   .sidebar-nav-item-inactive {
-    @apply text-corporate-600 hover:bg-corporate-100 hover:text-corporate-900;
+    @apply text-corporate-600 hover:bg-corporate-100 hover:text-corporate-900 dark:text-corporate-300 dark:hover:bg-corporate-800 dark:hover:text-corporate-100;
   }
 }
 
@@ -146,19 +146,19 @@
   }
   
   .corporate-heading {
-    @apply text-corporate-900 font-semibold tracking-tight;
+    @apply text-corporate-900 font-semibold tracking-tight dark:text-corporate-100;
   }
   
   .corporate-subheading {
-    @apply text-corporate-700 font-medium;
+    @apply text-corporate-700 font-medium dark:text-corporate-200;
   }
   
   .corporate-body {
-    @apply text-corporate-600 leading-relaxed;
+    @apply text-corporate-600 leading-relaxed dark:text-corporate-300;
   }
   
   .corporate-caption {
-    @apply text-corporate-500 text-sm;
+    @apply text-corporate-500 text-sm dark:text-corporate-400;
   }
 }
 
@@ -174,6 +174,10 @@
   
   .animate-pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
   }
 }
 
@@ -201,4 +205,3 @@
   .corporate-card {
     @apply shadow-none border border-gray-300;
   }
-}

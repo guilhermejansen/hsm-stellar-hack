@@ -3,15 +3,22 @@
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/components/common/theme-toggle';
+import { LanguageSelector } from '@/components/common/language-selector';
+import { NotificationCenter } from '@/components/common/notification-center';
 import { 
   Bell, 
   Shield, 
   Menu,
   Activity,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Settings,
+  User
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 /**
  * Dashboard Header Component
@@ -85,53 +92,58 @@ export function Header() {
         <div className="flex items-center space-x-4">
           {/* System Status */}
           <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-corporate-50 rounded-lg">
+          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-corporate-50 dark:bg-corporate-800 rounded-lg">
             {getStatusIcon()}
-            <span className="text-sm text-corporate-700">System:</span>
+            <span className="text-sm text-corporate-700 dark:text-corporate-300">System:</span>
             {getStatusBadge()}
           </div>
 
-          {/* Notifications */}
-          <div className="relative">
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="w-5 h-5 text-corporate-600" />
-              {notifications > 0 && (
-                <span className="absolute -top-1 -right-1 bg-stellar-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {notifications}
-                </span>
-              )}
-            </Button>
-          </div>
+          {/* Notifications Center */}
+          <NotificationCenter notificationCount={notifications} />
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
+
+          {/* Language Selector */}
+          <LanguageSelector />
 
           {/* User Info */}
           {user && (
-            <div className="hidden sm:flex items-center space-x-3 px-4 py-2 bg-corporate-50 rounded-lg">
-              <div className="text-right">
-                <div className="text-sm font-medium text-corporate-900">
-                  {user.name}
-                </div>
-                <div className="text-xs text-corporate-600">
-                  {user.role || 'User'}
-                </div>
-              </div>
-              
-              {/* Guardian Status */}
-              {user.isGuardian && (
-                <div className="flex flex-col items-center space-y-1">
-                  <Shield 
-                    className={cn(
-                      'w-4 h-4',
-                      user.hsmActivated ? 'text-success-500' : 'text-warning-500'
-                    )} 
-                  />
-                  <span className={cn(
-                    'text-xs font-medium',
-                    user.hsmActivated ? 'text-success-600' : 'text-warning-600'
-                  )}>
-                    {user.hsmActivated ? 'Active' : 'Pending'}
-                  </span>
-                </div>
-              )}
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-3 px-4 py-2 bg-corporate-50 dark:bg-corporate-800 rounded-lg hover:bg-corporate-100 dark:hover:bg-corporate-700">
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-corporate-900 dark:text-corporate-100">
+                      {user.name}
+                    </div>
+                    <div className="text-xs text-corporate-600 dark:text-corporate-300">
+                      {user.role || 'User'}
+                    </div>
+                  </div>
+                  <User className="w-4 h-4 text-corporate-600 dark:text-corporate-300" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/profile" className="flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    Profile Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/security" className="flex items-center">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Security Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/audit-logs" className="flex items-center">
+                    <Activity className="w-4 h-4 mr-2" />
+                    Audit Logs
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           {/* Activity Indicator */}

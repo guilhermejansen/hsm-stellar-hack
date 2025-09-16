@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { WalletDistributionChart } from '@/components/common/data-charts';
 import { useAuth } from '@/context/auth-context';
 import { walletAPI } from '@/lib/api';
 import { queryKeys } from '@/context/query-provider';
@@ -28,7 +29,8 @@ import {
   ExternalLink,
   AlertTriangle,
   CheckCircle,
-  RefreshCw
+  RefreshCw,
+  PieChart
 } from 'lucide-react';
 
 /**
@@ -423,6 +425,58 @@ export default function WalletsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Enhanced Wallet Distribution Visualization */}
+      <Card className="corporate-card">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <PieChart className="w-5 h-5 mr-2 text-stellar-600" />
+            Wallet Distribution Analysis
+          </CardTitle>
+          <CardDescription>
+            Visual representation of Hot/Cold wallet balance distribution
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <WalletDistributionChart data={balances?.data} />
+            </div>
+            <div className="space-y-4">
+              <h4 className="font-medium text-corporate-900 dark:text-corporate-100">Distribution Analysis</h4>
+              <div className="space-y-3">
+                <div className="p-3 bg-stellar-50 dark:bg-stellar-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-stellar-700 dark:text-stellar-300">Target Distribution</span>
+                    <Badge variant="outline">95% / 5%</Badge>
+                  </div>
+                  <p className="text-xs text-stellar-600 dark:text-stellar-400 mt-1">
+                    Optimal security and operational balance
+                  </p>
+                </div>
+                
+                <div className="p-3 bg-corporate-50 dark:bg-corporate-800 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-corporate-700 dark:text-corporate-300">Current Status</span>
+                    {balances?.data?.needsRebalancing ? (
+                      <Badge variant="warning">Needs Rebalancing</Badge>
+                    ) : (
+                      <Badge variant="success">Optimal</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-corporate-600 dark:text-corporate-300 mt-1">
+                    {balances?.data?.needsRebalancing 
+                      ? 'Distribution outside target range'
+                      : 'Distribution within acceptable limits'
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
 
       {/* Detailed Wallet Information */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

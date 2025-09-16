@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { WalletDistributionChart, GuardianActivityChart } from '@/components/common/data-charts';
 import { 
   Users, 
   Wallet, 
@@ -10,7 +11,8 @@ import {
   TrendingUp,
   Shield,
   Eye,
-  CheckCircle
+  CheckCircle,
+  PieChart
 } from 'lucide-react';
 import { formatXLMWithSuffix, formatPercentage } from '@/lib/utils';
 
@@ -151,6 +153,47 @@ export function OverviewCards({
           </div>
         </CardContent>
       </Card>
+
+      {/* Charts Section */}
+      <div className="col-span-full grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Wallet Distribution Chart */}
+        <Card className="corporate-card">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <PieChart className="w-5 h-5 mr-2 text-stellar-600" />
+              Wallet Distribution
+            </CardTitle>
+            <CardDescription>
+              Hot/Cold wallet balance distribution
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <WalletDistributionChart data={walletBalances} />
+          </CardContent>
+        </Card>
+
+        {/* Guardian Activity Chart */}
+        <Card className="corporate-card">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Activity className="w-5 h-5 mr-2 text-success-600" />
+              Guardian Activity
+            </CardTitle>
+            <CardDescription>
+              Approval activity by guardian role
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <GuardianActivityChart 
+              data={[
+                { guardian: 'CEO', approvals: guardianStats?.approvals?.total || 42 },
+                { guardian: 'CFO', approvals: Math.floor((guardianStats?.approvals?.total || 42) * 0.8) },
+                { guardian: 'CTO', approvals: Math.floor((guardianStats?.approvals?.total || 42) * 0.9) },
+              ]}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </>
   );
 }

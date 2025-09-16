@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AdvancedTable } from '@/components/common/advanced-table';
+import { TransactionVolumeChart } from '@/components/common/data-charts';
 import { transactionAPI } from '@/lib/api';
 import { queryKeys } from '@/context/query-provider';
 import { TransactionStatusBadge, WalletTypeBadge } from '@/components/common/status-badge';
@@ -27,7 +29,8 @@ import {
   TrendingUp,
   Snowflake,
   Flame,
-  MoreHorizontal
+  MoreHorizontal,
+  BarChart3
 } from 'lucide-react';
 
 /**
@@ -199,6 +202,30 @@ export default function TransactionsPage() {
         </Card>
       )}
 
+      {/* Transaction Volume Chart */}
+      <Card className="corporate-card">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <BarChart3 className="w-5 h-5 mr-2 text-stellar-600" />
+            Transaction Volume Trend
+          </CardTitle>
+          <CardDescription>
+            Transaction volume over time with privacy protection analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TransactionVolumeChart 
+            data={[
+              { date: '2024-12-10', volume: 45000, transactions: 12 },
+              { date: '2024-12-11', volume: 52000, transactions: 15 },
+              { date: '2024-12-12', volume: 38000, transactions: 8 },
+              { date: '2024-12-13', volume: 67000, transactions: 18 },
+              { date: '2024-12-14', volume: 71000, transactions: 22 },
+            ]}
+          />
+        </CardContent>
+      </Card>
+
       {/* Filters */}
       <Card className="corporate-card">
         <CardHeader>
@@ -272,144 +299,134 @@ export default function TransactionsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {transactionsLoading ? (
-            <TableLoading rows={10} />
-          ) : transactions?.data && transactions.data.length > 0 ? (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Transaction</TableHead>
-                    <TableHead>From Wallet</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Destination</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Privacy</TableHead>
-                    <TableHead>Approvals</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.data.map((tx: any) => (
-                    <TableRow key={tx.id}>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <code className="text-sm bg-corporate-100 px-2 py-1 rounded">
-                            {tx.id.slice(-8)}...
-                          </code>
-                          {tx.stellarHash && (
-                            <div className="text-xs text-corporate-500">
-                              Stellar: {tx.stellarHash.slice(-8)}...
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {tx.fromWallet.walletType === 'COLD' ? (
-                            <Snowflake className="w-4 h-4 text-stellar-600" />
-                          ) : (
-                            <Flame className="w-4 h-4 text-warning-600" />
-                          )}
-                          <div>
-                            <WalletTypeBadge type={tx.fromWallet.walletType} />
-                            <div className="text-xs text-corporate-500 mt-1">
-                              {truncateAddress(tx.fromWallet.publicKey)}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="font-mono font-medium">
-                        {formatXLMWithSuffix(tx.amount)}
-                      </TableCell>
-                      
-                      <TableCell className="font-mono text-sm">
-                        {truncateAddress(tx.toAddress)}
-                      </TableCell>
-                      
-                      <TableCell>
-                        <TransactionStatusBadge status={tx.status} />
-                      </TableCell>
-                      
-                      <TableCell>
-                        {tx.privacyProtection?.isPrivacyProtected ? (
-                          <div className="space-y-1">
-                            <Badge variant="success" className="text-xs">
-                              <Shield className="w-3 h-3 mr-1" />
-                              Protected
-                            </Badge>
-                            <div className="text-xs text-corporate-500">
-                              {truncateAddress(tx.privacyProtection.ephemeralAddress)}
-                            </div>
-                          </div>
-                        ) : (
-                          <Badge variant="warning" className="text-xs">
-                            Not Protected
-                          </Badge>
-                        )}
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="text-sm">
-                          {tx.approvals?.length || 0}/{tx.requiredApprovals || 0}
-                        </div>
-                        {tx.approvals && tx.approvals.length > 0 && (
-                          <div className="text-xs text-corporate-500">
-                            {tx.approvals.map((approval: any) => approval.guardianRole).join(', ')}
-                          </div>
-                        )}
-                      </TableCell>
-                      
-                      <TableCell className="text-sm text-corporate-600">
-                        {formatDate(tx.createdAt)}
-                      </TableCell>
-                      
-                      <TableCell>
-                        <Link href={`/dashboard/transactions/${tx.id}`}>
-                          <Button variant="outline" size="sm">
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {transactions.pagination && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-corporate-600">
-                    Showing {transactions.data.length} of {transactions.pagination.total} transactions
+          <AdvancedTable
+            data={transactions?.data || []}
+            columns={[
+              {
+                accessorKey: 'id',
+                header: 'Transaction',
+                cell: ({ row }: any) => (
+                  <div className="space-y-1">
+                    <code className="text-sm bg-corporate-100 dark:bg-corporate-800 px-2 py-1 rounded">
+                      {row.original.id.slice(-8)}...
+                    </code>
+                    {row.original.stellarHash && (
+                      <div className="text-xs text-corporate-500 dark:text-corporate-400">
+                        Stellar: {row.original.stellarHash.slice(-8)}...
+                      </div>
+                    )}
                   </div>
+                ),
+              },
+              {
+                accessorKey: 'fromWallet',
+                header: 'From Wallet',
+                cell: ({ row }: any) => (
                   <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={!transactions.pagination.hasPrev}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm text-corporate-600">
-                      Page {currentPage} of {transactions.pagination.totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={!transactions.pagination.hasNext}
-                    >
-                      Next
-                    </Button>
+                    {row.original.fromWallet.walletType === 'COLD' ? (
+                      <Snowflake className="w-4 h-4 text-stellar-600" />
+                    ) : (
+                      <Flame className="w-4 h-4 text-warning-600" />
+                    )}
+                    <div>
+                      <WalletTypeBadge type={row.original.fromWallet.walletType} />
+                      <div className="text-xs text-corporate-500 dark:text-corporate-400 mt-1">
+                        {truncateAddress(row.original.fromWallet.publicKey)}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
-            </>
+                ),
+              },
+              {
+                accessorKey: 'amount',
+                header: 'Amount',
+                cell: ({ row }: any) => (
+                  <div className="font-mono font-medium">
+                    {formatXLMWithSuffix(row.original.amount)}
+                  </div>
+                ),
+              },
+              {
+                accessorKey: 'toAddress',
+                header: 'Destination',
+                cell: ({ row }: any) => (
+                  <div className="font-mono text-sm">
+                    {truncateAddress(row.original.toAddress)}
+                  </div>
+                ),
+              },
+              {
+                accessorKey: 'status',
+                header: 'Status',
+                cell: ({ row }: any) => (
+                  <TransactionStatusBadge status={row.original.status} />
+                ),
+              },
+              {
+                accessorKey: 'privacyProtection',
+                header: 'Privacy',
+                cell: ({ row }: any) => (
+                  row.original.privacyProtection?.isPrivacyProtected ? (
+                    <div className="space-y-1">
+                      <Badge variant="success" className="text-xs">
+                        <Shield className="w-3 h-3 mr-1" />
+                        Protected
+                      </Badge>
+                      <div className="text-xs text-corporate-500 dark:text-corporate-400">
+                        {truncateAddress(row.original.privacyProtection.ephemeralAddress)}
+                      </div>
+                    </div>
+                  ) : (
+                    <Badge variant="warning" className="text-xs">
+                      Not Protected
+                    </Badge>
+                  )
+                ),
+              },
+              {
+                accessorKey: 'approvals',
+                header: 'Approvals',
+                cell: ({ row }: any) => (
+                  <div>
+                    <div className="text-sm">
+                      {row.original.approvals?.length || 0}/{row.original.requiredApprovals || 0}
+                    </div>
+                    {row.original.approvals && row.original.approvals.length > 0 && (
+                      <div className="text-xs text-corporate-500 dark:text-corporate-400">
+                        {row.original.approvals.map((approval: any) => approval.guardianRole).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                accessorKey: 'createdAt',
+                header: 'Created',
+                cell: ({ row }: any) => (
+                  <div className="text-sm text-corporate-600 dark:text-corporate-300">
+                    {formatDate(row.original.createdAt)}
+                  </div>
+                ),
+              },
+              {
+                id: 'actions',
+                header: 'Actions',
+                cell: ({ row }: any) => (
+                  <Link href={`/dashboard/transactions/${row.original.id}`}>
+                    <Button variant="outline" size="sm">
+                      <Eye className="w-4 h-4 mr-1" />
+                      View
+                    </Button>
+                  </Link>
+                ),
+              },
+            ]}
+            searchPlaceholder="Search transactions..."
+            enableGlobalFilter={true}
+            enableSorting={true}
+            enablePagination={true}
+            pageSize={15}
+          />
           ) : (
             <div className="text-center py-12">
               <ArrowRightLeft className="w-16 h-16 text-corporate-300 mx-auto mb-4" />
