@@ -170,6 +170,40 @@ export class StellarService implements OnModuleInit {
         thresholds: account.thresholds,
       };
     } catch (error) {
+      // If account doesn't exist on testnet, create and fund it
+      if (error.message === "Not Found" && this.configService.get("STELLAR_NETWORK") === "testnet") {
+        this.logger.log(`🆕 Account ${publicKey} not found on testnet, creating and funding...`);
+        try {
+          await this.createTestnetAccount(publicKey);
+          
+          // Wait a moment for the account to be created
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Try to get account info again
+          const account = await this.horizonServer.loadAccount(publicKey);
+          return {
+            accountId: account.accountId(),
+            sequence: account.sequenceNumber(),
+            balances: account.balances.map((balance) => ({
+              assetType: balance.asset_type,
+              balance: balance.balance,
+            })),
+            subentryCount: account.subentry_count,
+            thresholds: account.thresholds,
+          };
+        } catch (createError) {
+          this.logger.error(`❌ Failed to create testnet account ${publicKey}:`, createError.message);
+          // Return default account info for non-existent account
+          return {
+            accountId: publicKey,
+            sequence: "0",
+            balances: [{ assetType: "native", balance: "0.0000000" }],
+            subentryCount: 0,
+            thresholds: { low_threshold: 0, med_threshold: 0, high_threshold: 0 },
+          };
+        }
+      }
+      
       this.logger.error(
         `❌ Failed to get account info for ${publicKey}:`,
         error.message,
