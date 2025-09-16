@@ -4,6 +4,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 
 import { DatabaseService } from "../database/database.service";
 import { HSMService } from "../hsm/hsm.service";
+import { StellarService } from "../stellar/stellar.service";
 import { AuditService } from "../common/audit.service";
 import { WalletHierarchy, WalletCreationRequest } from "../common/interfaces";
 
@@ -28,6 +29,7 @@ export class WalletService {
   constructor(
     private readonly database: DatabaseService,
     private readonly hsmService: HSMService,
+    private readonly stellarService: StellarService,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
   ) {}
@@ -384,6 +386,7 @@ export class WalletService {
 
   /**
    * Check if wallet can send amount
+   * Auto-syncs with Stellar blockchain if local balance is 0
    */
   async canSendAmount(
     walletId: string,
@@ -407,7 +410,34 @@ export class WalletService {
       }
 
       const requestedAmount = new Decimal(amount);
-      const availableBalance = wallet.balance.minus(wallet.reservedBalance);
+      let availableBalance = wallet.balance.minus(wallet.reservedBalance);
+
+      // 🔄 AUTO-SYNC: If local balance is 0, sync with Stellar blockchain
+      if (availableBalance.eq(0)) {
+        this.logger.log(`🔄 Auto-syncing balance for wallet ${walletId} from Stellar blockchain...`);
+        
+        try {
+          const stellarBalance = await this.stellarService.getAccountInfo(wallet.publicKey);
+          const stellarXlmBalance = stellarBalance.balances.find(b => b.assetType === 'native')?.balance || "0";
+          
+          if (parseFloat(stellarXlmBalance) > 0) {
+            // Update local balance with Stellar balance
+            await this.database.wallet.update({
+              where: { id: walletId },
+              data: { 
+                balance: new Decimal(stellarXlmBalance),
+                updatedAt: new Date()
+              }
+            });
+            
+            availableBalance = new Decimal(stellarXlmBalance).minus(wallet.reservedBalance);
+            this.logger.log(`✅ Synced wallet ${walletId} balance: ${stellarXlmBalance} XLM`);
+          }
+        } catch (syncError) {
+          this.logger.warn(`⚠️ Failed to sync balance for wallet ${walletId}: ${syncError.message}`);
+          // Continue with local balance if sync fails
+        }
+      }
 
       if (requestedAmount.gt(availableBalance)) {
         return {
