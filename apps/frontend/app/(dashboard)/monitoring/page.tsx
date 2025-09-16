@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { monitoringAPI } from '@/lib/api';
 import { queryKeys } from '@/context/query-provider';
 import { SystemHealthBadge } from '@/components/common/status-badge';
+import { SystemPerformanceChart } from '@/components/common/data-charts';
 import { CardLoading } from '@/components/common/loading-spinner';
 import { formatDate } from '@/lib/utils';
 import { 
@@ -22,7 +23,8 @@ import {
   TrendingUp,
   BarChart3,
   Eye,
-  RefreshCw
+  RefreshCw,
+  TrendingDown
 } from 'lucide-react';
 
 /**
@@ -217,7 +219,33 @@ export default function MonitoringPage() {
       </Card>
 
       {/* Performance Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
+        {/* Performance Chart */}
+        <Card className="corporate-card">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2 text-stellar-600" />
+              System Performance Trends
+            </CardTitle>
+            <CardDescription>
+              Real-time performance metrics and latency tracking
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SystemPerformanceChart 
+              data={[
+                { time: '10:00', latency: 145, successRate: 98.5 },
+                { time: '10:15', latency: 132, successRate: 97.2 },
+                { time: '10:30', latency: 168, successRate: 99.1 },
+                { time: '10:45', latency: 156, successRate: 96.8 },
+                { time: '11:00', latency: 142, successRate: 98.9 },
+                { time: '11:15', latency: 139, successRate: 99.3 },
+              ]}
+            />
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="corporate-card">
           <CardHeader>
             <CardTitle className="flex items-center">

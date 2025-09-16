@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { privacyAPI, transactionAPI } from '@/lib/api';
 import { queryKeys } from '@/context/query-provider';
 import { PrivacyScoreBadge } from '@/components/common/status-badge';
+import { PrivacyScoreGauge } from '@/components/common/data-charts';
 import { CardLoading } from '@/components/common/loading-spinner';
 import { useAuth } from '@/context/auth-context';
 import { 
@@ -19,7 +20,8 @@ import {
   Activity,
   CheckCircle,
   AlertTriangle,
-  Info
+  Info,
+  PieChart
 } from 'lucide-react';
 
 /**
@@ -153,7 +155,7 @@ export default function PrivacyPage() {
       </div>
 
       {/* Privacy Protection Status */}
-      <Card className="corporate-card bg-gradient-to-br from-success-50 to-stellar-50">
+      <Card className="corporate-card bg-gradient-to-br from-success-50 to-stellar-50 dark:from-success-900/20 dark:to-stellar-900/20">
         <CardHeader>
           <CardTitle className="flex items-center">
             <Lock className="w-5 h-5 mr-2 text-success-600" />
@@ -167,8 +169,63 @@ export default function PrivacyPage() {
           {isLoading ? (
             <CardLoading />
           ) : privacyReport?.data ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
+                  <div className="text-3xl font-bold text-success-700 dark:text-success-400">
+                    {privacyReport.data.summary.ephemeralTransactions}
+                  </div>
+                  <div className="text-sm text-corporate-600 dark:text-corporate-300">Privacy Protected</div>
+                </div>
+                
+                <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
+                  <div className="text-3xl font-bold text-stellar-700 dark:text-stellar-400">
+                    {privacyReport.data.summary.uniqueAddressesGenerated}
+                  </div>
+                  <div className="text-sm text-corporate-600 dark:text-corporate-300">Unique Addresses</div>
+                </div>
+                
+                <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
+                  <div className="text-3xl font-bold text-warning-700 dark:text-warning-400">
+                    {privacyReport.data.privacy.addressReuse}
+                  </div>
+                  <div className="text-sm text-corporate-600 dark:text-corporate-300">Address Reuse</div>
+                </div>
+                
+                <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
+                  <div className="text-3xl font-bold text-corporate-700 dark:text-corporate-300">
+                    {Math.round(privacyReport.data.summary.privacyCompliance)}%
+                  </div>
+                  <div className="text-sm text-corporate-600 dark:text-corporate-300">Compliance</div>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-corporate-900 dark:text-corporate-100 mb-4">Privacy Score</h4>
+                <PrivacyScoreGauge score={Math.round(privacyReport.data.summary.privacyCompliance)} />
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {/* Enhanced Privacy Report with Visual Indicators */}
+      <Card className="corporate-card">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <PieChart className="w-5 h-5 mr-2 text-stellar-600" />
+            Privacy Protection Analysis
+          </CardTitle>
+          <CardDescription>
+            Detailed privacy metrics and correlation prevention status
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <CardLoading />
+          ) : privacyReport?.data ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-4 bg-white rounded-lg">
+              <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
                 <div className="text-3xl font-bold text-success-700">
                   {privacyReport.data.summary.ephemeralTransactions}
                 </div>
@@ -178,7 +235,7 @@ export default function PrivacyPage() {
                 </div>
               </div>
               
-              <div className="text-center p-4 bg-white rounded-lg">
+              <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
                 <div className="text-3xl font-bold text-stellar-700">
                   {privacyReport.data.summary.uniqueAddressesGenerated}
                 </div>
@@ -188,7 +245,7 @@ export default function PrivacyPage() {
                 </div>
               </div>
               
-              <div className="text-center p-4 bg-white rounded-lg">
+              <div className="text-center p-4 bg-white dark:bg-corporate-800 rounded-lg">
                 <div className="text-3xl font-bold text-corporate-700">
                   {Math.round(privacyReport.data.summary.privacyCompliance)}%
                 </div>
