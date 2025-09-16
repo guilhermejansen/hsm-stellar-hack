@@ -1,12 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   images: {
     domains: ['api.qrserver.com', 'stellar.expert'],
     formats: ['image/webp', 'image/avif'],
   },
+  outputFileTracingRoot: require('path').join(__dirname, '../../'),
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },

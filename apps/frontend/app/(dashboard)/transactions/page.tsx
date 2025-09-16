@@ -427,7 +427,7 @@ export default function TransactionsPage() {
             enablePagination={true}
             pageSize={15}
           />
-          ) : (
+        ) : (
             <div className="text-center py-12">
               <ArrowRightLeft className="w-16 h-16 text-corporate-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-corporate-700 mb-2">
