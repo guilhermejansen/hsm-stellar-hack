@@ -67,7 +67,7 @@ export class MonitoringController {
         success: true,
         data: {
           status: "healthy",
-          timestamp: "2024-12-14T10:30:00Z",
+          timestamp: "2025-09-14T10:30:00Z",
           service: "stellar-custody-mvp-backend",
           version: "1.0.0",
           environment: "development",
@@ -96,7 +96,7 @@ export class MonitoringController {
         metadata: {
           checkDuration: 156,
           allComponentsHealthy: true,
-          lastFullCheck: "2024-12-14T10:30:00Z",
+          lastFullCheck: "2025-09-14T10:30:00Z",
         },
       },
     },

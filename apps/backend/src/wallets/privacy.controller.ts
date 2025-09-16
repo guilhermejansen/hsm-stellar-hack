@@ -100,7 +100,7 @@ export class PrivacyController {
           privacyProtection: "EXCELLENT",
         },
         metadata: {
-          timestamp: "2024-12-14T10:30:00Z",
+          timestamp: "2025-09-14T10:30:00Z",
           privacyStandard: "ENTERPRISE_GRADE",
         },
       },
@@ -189,7 +189,7 @@ export class PrivacyController {
           ],
         },
         metadata: {
-          timestamp: "2024-12-14T10:30:00Z",
+          timestamp: "2025-09-14T10:30:00Z",
           privacyStandard: "ENTERPRISE_GRADE",
           complianceLevel: "EXCELLENT",
         },
@@ -318,10 +318,10 @@ export class PrivacyController {
             isActive: false,
             isUsed: true,
             isExpired: true,
-            createdAt: "2024-12-14T10:20:00Z",
-            usedAt: "2024-12-14T10:30:00Z",
-            destroyedAt: "2024-12-14T10:30:15Z",
-            expiresAt: "2024-12-14T11:20:00Z",
+            createdAt: "2025-09-14T10:20:00Z",
+            usedAt: "2025-09-14T10:30:00Z",
+            destroyedAt: "2025-09-14T10:30:15Z",
+            expiresAt: "2025-09-14T11:20:00Z",
           },
           hsm: {
             keyId: "ephemeral_tx_42_abc123def456",

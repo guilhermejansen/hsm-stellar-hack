@@ -165,7 +165,7 @@ export class WalletResponseDto {
 
   @ApiProperty({
     description: "Creation timestamp",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   createdAt: string;
 }
@@ -241,7 +241,7 @@ export class RebalanceResultDto {
 
   @ApiProperty({
     description: "Timestamp of rebalance",
-    example: "2024-12-14T10:35:00Z",
+    example: "2025-09-14T10:35:00Z",
   })
   executedAt: string;
 }
@@ -297,7 +297,7 @@ export class WalletBalanceResponseDto {
 
   @ApiProperty({
     description: "Last updated timestamp",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   lastUpdated: string;
 }

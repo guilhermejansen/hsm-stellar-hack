@@ -95,7 +95,7 @@ export class AuthController {
         metadata: {
           sessionDuration: "15 minutes",
           nextStep: "TOTP verification",
-          timestamp: "2024-12-14T10:30:00Z",
+          timestamp: "2025-09-14T10:30:00Z",
         },
       },
     },
@@ -208,7 +208,7 @@ export class AuthController {
           hsmPartitionActive: true,
           guardianRole: "CEO",
           guardianLevel: 3,
-          timestamp: "2024-12-14T10:30:00Z",
+          timestamp: "2025-09-14T10:30:00Z",
         },
       },
     },

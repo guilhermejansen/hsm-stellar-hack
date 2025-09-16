@@ -190,13 +190,13 @@ export class SessionInfoDto {
 
   @ApiProperty({
     description: "Session creation time",
-    example: "2024-12-14T10:20:00Z",
+    example: "2025-09-14T10:20:00Z",
   })
   createdAt: string;
 
   @ApiProperty({
     description: "Last activity time",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   lastActivity: string;
 

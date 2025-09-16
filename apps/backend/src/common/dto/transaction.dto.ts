@@ -240,7 +240,7 @@ export class TransactionResponseDto {
     required: false,
     properties: {
       challengeHash: { type: "string", example: "A1B2C3D4E5F6G7H8" },
-      expiresAt: { type: "string", example: "2024-12-14T10:35:00Z" },
+      expiresAt: { type: "string", example: "2025-09-14T10:35:00Z" },
       isActive: { type: "boolean", example: true },
     },
   })
@@ -252,13 +252,13 @@ export class TransactionResponseDto {
 
   @ApiProperty({
     description: "Creation timestamp",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   createdAt: string;
 
   @ApiProperty({
     description: "Execution timestamp",
-    example: "2024-12-14T10:35:00Z",
+    example: "2025-09-14T10:35:00Z",
     required: false,
   })
   executedAt?: string;
@@ -284,7 +284,7 @@ export class ChallengeResponseDto {
 
   @ApiProperty({
     description: "Challenge expiration time",
-    example: "2024-12-14T10:35:00Z",
+    example: "2025-09-14T10:35:00Z",
   })
   expiresAt: string;
 

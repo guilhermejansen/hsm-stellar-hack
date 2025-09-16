@@ -51,7 +51,7 @@ export class EphemeralKeyResponseDto {
 
   @ApiProperty({
     description: "Key expiration time (1 hour)",
-    example: "2024-12-14T11:30:00Z",
+    example: "2025-09-14T11:30:00Z",
   })
   expiresAt: string;
 
@@ -273,8 +273,8 @@ export class TransactionWithPrivacyDto {
         properties: {
           isUsed: { type: "boolean", example: true },
           isExpired: { type: "boolean", example: true },
-          destroyedAt: { type: "string", example: "2024-12-14T10:35:00Z" },
-          expiresAt: { type: "string", example: "2024-12-14T10:35:00Z" },
+          destroyedAt: { type: "string", example: "2025-09-14T10:35:00Z" },
+          expiresAt: { type: "string", example: "2025-09-14T10:35:00Z" },
         },
       },
       privacyBenefits: {
@@ -313,7 +313,7 @@ export class TransactionWithPrivacyDto {
       type: "object",
       properties: {
         guardianRole: { type: "string", example: "CEO" },
-        approvedAt: { type: "string", example: "2024-12-14T10:25:00Z" },
+        approvedAt: { type: "string", example: "2025-09-14T10:25:00Z" },
         authMethod: { type: "string", example: "OCRA_LIKE" },
       },
     },
@@ -326,13 +326,13 @@ export class TransactionWithPrivacyDto {
 
   @ApiProperty({
     description: "Creation timestamp",
-    example: "2024-12-14T10:20:00Z",
+    example: "2025-09-14T10:20:00Z",
   })
   createdAt: string;
 
   @ApiProperty({
     description: "Execution timestamp",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
     required: false,
   })
   executedAt?: string;
@@ -355,13 +355,13 @@ export class SessionInfoDto {
 
   @ApiProperty({
     description: "Session creation time",
-    example: "2024-12-14T10:20:00Z",
+    example: "2025-09-14T10:20:00Z",
   })
   createdAt: string;
 
   @ApiProperty({
     description: "Last activity time",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   lastActivity: string;
 

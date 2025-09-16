@@ -22,7 +22,7 @@ export class SystemHealthDto {
 
   @ApiProperty({
     description: "System timestamp",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   timestamp: string;
 
@@ -164,7 +164,7 @@ export class PerformanceMetricsDto {
 
   @ApiProperty({
     description: "Timestamp of metrics collection",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   timestamp: string;
 }
@@ -229,7 +229,7 @@ export class SecurityMetricsDto {
 
   @ApiProperty({
     description: "Timestamp of metrics collection",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
   })
   timestamp: string;
 }

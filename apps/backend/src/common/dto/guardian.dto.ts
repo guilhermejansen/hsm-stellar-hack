@@ -217,14 +217,14 @@ export class GuardianResponseDto {
 
   @ApiProperty({
     description: "Last approval timestamp",
-    example: "2024-12-14T10:30:00Z",
+    example: "2025-09-14T10:30:00Z",
     required: false,
   })
   lastApprovalAt?: string;
 
   @ApiProperty({
     description: "Creation timestamp",
-    example: "2024-12-01T09:00:00Z",
+    example: "2025-09-01T09:00:00Z",
   })
   createdAt: string;
 }
